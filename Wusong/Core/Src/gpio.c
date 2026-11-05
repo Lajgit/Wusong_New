@@ -136,8 +136,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /* 中文注释：后台设置按键K3使用PD0；游玩按键1~4使用PD8/PD9/PD10/PD11，均由板上电阻上拉。 */
-  GPIO_InitStruct.Pin = KeyBoard1_Pin | PlayButton1_Pin | PlayButton2_Pin | PlayButton3_Pin | PlayButton4_Pin;
+  /* 中文注释：后台设置按键K3使用PD0；游玩按键1~6使用PD8~PD13，均由板上电阻上拉。 */
+  GPIO_InitStruct.Pin = KeyBoard1_Pin | PlayButton1_Pin | PlayButton2_Pin | PlayButton3_Pin | PlayButton4_Pin | PlayButton5_Pin | PlayButton6_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);

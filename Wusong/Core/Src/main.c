@@ -97,8 +97,9 @@ int main(void)
   MX_TIM7_Init();
   MX_IWDG_Init();
   MX_USART3_UART_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  /* 中文注释：USART1用于安卓通信，USART3使用PB10/PB11连接独立控台，均为115200 8N1。 */
+  /* 中文注释：USART1连接安卓，USART3使用PB10/PB11连接控台，USART2使用PD5/PD6连接微动板，均为115200 8N1。 */
   Main_Init();
   /* USER CODE END 2 */
 

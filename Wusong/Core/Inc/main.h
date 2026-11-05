@@ -135,7 +135,7 @@ void Error_Handler(void);
 #define Tube_SER_Pin GPIO_PIN_15
 #define Tube_SER_GPIO_Port GPIOB
 
-/* 中文注释：四路外接游玩/拍拍按键，协议编号依次为1、2、3、4；按键4正式使用PD11。 */
+/* 六路直连游玩/拍拍按键使用PD8~PD13，对外编号依次为1~6。 */
 #define PlayButton1_Pin GPIO_PIN_8
 #define PlayButton1_GPIO_Port GPIOD
 #define PlayButton2_Pin GPIO_PIN_9
@@ -145,7 +145,12 @@ void Error_Handler(void);
 #define PlayButton4_Pin GPIO_PIN_11
 #define PlayButton4_GPIO_Port GPIOD
 
-/* 中文注释：PD5/PD6按新原理图保留给串口2，通信参数后续确定后再初始化USART2。 */
+#define PlayButton5_Pin GPIO_PIN_12
+#define PlayButton5_GPIO_Port GPIOD
+#define PlayButton6_Pin GPIO_PIN_13
+#define PlayButton6_GPIO_Port GPIOD
+
+/* PD5/PD6使用USART2与球盘微动板通信，115200 8N1。 */
 #define Serial2_TX_Pin GPIO_PIN_5
 #define Serial2_TX_GPIO_Port GPIOD
 #define Serial2_RX_Pin GPIO_PIN_6

@@ -65,6 +65,7 @@ void EXTI9_5_IRQHandler(void);
 void EXTI15_10_IRQHandler(void);
 void USART1_IRQHandler(void);
 void USART3_IRQHandler(void);
+void USART2_IRQHandler(void); // 球盘微动板串口接收中断
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
