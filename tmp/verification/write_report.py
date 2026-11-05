@@ -23,7 +23,7 @@ details={
 'Wusong/Task/Inc/CommTask.h':('协议定义 / 方向、命令、Mesg_TypeDef、对外接口','安卓编号恢复参考武松定义；增加从板协议和状态接口。','保留14字节布局，去除其他机型的命令含义冲突。'),
 'Wusong/Task/Inc/CtrlTask.h':('机构参数 / HoolleMotor_Speed','吐珠电机速度80改为100，恢复参考值。','只影响吐珠通道，占空比参数与原武松一致。'),
 'Wusong/Task/Inc/MainTask.h':('场景定义 / Scene_t','补齐原武松0~11场景号。','游戏、加注、后台和洞口场景判断。'),
-'Wusong/Task/Src/CommTask.c':('通信任务 / USART1/2/3_Deal、Ball_SetChannel/SendValve/SendScene/RequestEjectIfOccupied/StopFlow/FlowTask、CommInit/CommTask、USART_SendMesg、Resend_Task、MesgDeal_Task、CommTransmitFillData','恢复原安卓业务，接入球盘与控台、流水灯和命中快照，控台06处理防摇；新增场景同步、条件成对清洞，场景更新取消旧场景重发；每条重发帧记录原串口。','主控协议与远程球盘业务；原APP的串口升级入口延后，F0恢复普通复位。'),
+'Wusong/Task/Src/CommTask.c':('通信任务 / USART1/2/3_Deal、Board_EnterBootloader、Ball_SetChannel/SendValve/SendScene/RequestEjectIfOccupied/StopFlow/FlowTask、CommInit/CommTask、USART_SendMesg、Resend_Task、MesgDeal_Task、CommTransmitFillData','恢复原安卓业务，接入球盘与控台、流水灯和命中快照，控台06处理防摇；新增场景同步、条件成对清洞，场景更新取消旧场景重发；每条重发帧记录原串口。F0数据为42 4F 54 41时校验RTC备份标记写入成功，关闭本地输出、发送微动板停止命令并等待100ms后复位。','主控协议与远程球盘业务；接入已有Bootloader串口升级，其他F0数据继续普通复位，备份域不可写时不复位。'),
 'Wusong/Task/Src/CtrlTask.c':('机构任务 / Card_Output、CtrlTask','恢复零数量出卡完成通知，电子锁保持原2000ms。','原武松吐卡和开锁行为。'),
 'Wusong/Task/Src/InterruptTask.c':('接收回调 / HAL_UART_RxCpltCallback、HAL_UART_ErrorCallback','接入Rx2环形缓冲；UART错误后重新接收。','主控三路串口正常接收与错误恢复。'),
 'Wusong/Task/Src/KeyTask.c':('按键任务 / SettingButton_*、PlayButton_Init、KeyAll_Init','补齐六路直连按键；K3短按开锁/长按后台，K2长按4秒。','恢复参考后台按键动作并匹配新主板引脚。'),
@@ -51,7 +51,7 @@ details={
 assert set(files)==set(details),(set(files)-set(details),set(details)-set(files))
 # 固定比较初始提交，分批提交后仍能重建完整迁移记录。
 lines=['# 逐文件修改记录','',
-'已按功能补充引脚、协议字段、重发去重、阀状态、后台跟灯和升级边界的中文注释；本轮注释修改未改变C代码词法记号。', '',
+'已按功能补充引脚、协议字段、重发去重、阀状态、后台跟灯和升级边界的中文注释；另按用户要求补充主控F0串口升级入口。', '',
 '修改基线为本目录Git初始提交8ecfd8c。功能和安卓协议依据只读参考工程 Wusong_New_1.7_fixed；原项目及General_KT均未写入。',
 '', '以下每项给出绝对路径、模块/函数、原因及影响范围；diff中的减号行是原代码，加号行是修改后代码，空格行是上下文。生产源码仅修改已有文件，新增文件限于说明、输出固件和验证材料。','']
 for i,path in enumerate(files,1):

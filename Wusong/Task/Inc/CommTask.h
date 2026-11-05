@@ -6,6 +6,8 @@
 #include "app_list.h"
 
 #define VERSION 0x01000400U
+/* F0数据为42 4F 54 41时请求串口升级，与Bootloader的RTC备份标记一致。 */
+#define OTA_REQUEST_MAGIC 0x424F5441U
 /* 功能码1表示方向；三条串口共用同一14字节帧格式。 */
 #define Board_to_Android 0x00U
 #define Android_to_Board 0x01U

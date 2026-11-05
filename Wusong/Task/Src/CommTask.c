@@ -123,6 +123,56 @@ static void Ball_StopFlow(void)
     }
 }
 
+/* 中文注释：只在升级请求中写RTC备份标记，普通F0继续沿用原复位行为。 */
+static void Board_EnterBootloader(void)
+{
+    uint32_t timeout = 100000U;
+    uint8_t retry;
+
+    __HAL_RCC_PWR_CLK_ENABLE();
+    __DSB();
+    (void)RCC->APB1ENR;
+    HAL_PWR_EnableBkUpAccess();
+    while (((PWR->CR & PWR_CR_DBP) == 0U) && timeout > 0U)
+        timeout--;
+    if (timeout == 0U)
+    {
+        HAL_PWR_DisableBkUpAccess();
+        return;
+    }
+    __HAL_RCC_RTC_ENABLE();
+    __DSB();
+    (void)RCC->BDCR;
+    for (retry = 0U; retry < 3U; retry++)
+    {
+        RTC->BKP0R = OTA_REQUEST_MAGIC;
+        __DSB();
+        __ISB();
+        if (RTC->BKP0R == OTA_REQUEST_MAGIC)
+            break;
+    }
+    HAL_PWR_DisableBkUpAccess();
+    /* 标记不可写时保持APP运行，避免普通重启被误当作已进入升级。 */
+    if (retry == 3U)
+        return;
+
+    /* 直接关闭硬件输出，不能只设STOP后等待即将停止运行的任务处理。 */
+    SteelBall_MotorSwitch(0U);
+    Motor_Hoolle1.Motor.LosePower(&Motor_Hoolle1.Motor);
+    Motor_Hoolle2.Motor.LosePower(&Motor_Hoolle2.Motor);
+    Motor_Hoolle2.Motor.state = DEVICE_STATE_IDLE;
+    Card.Switch.off(&Card.Switch);
+    Card.Switch.state = DEVICE_STATE_IDLE;
+    Lock_Valve.Switch.off(&Lock_Valve.Switch);
+    Lock_Valve.Switch.state = DEVICE_STATE_IDLE;
+    Ball_StopFlow();
+    Ball_SendValve(BALL_CMD_STOP, 0U);
+
+    /* 应答和停阀帧均为阻塞发送；保留中断并等待从板处理后再系统复位。 */
+    HAL_Delay(100U);
+    System_Reset();
+}
+
 /* 流水灯只在游玩/加注场景推进，先处理本轮微动上报再更新灯组。 */
 static void Ball_FlowTask(void)
 {
@@ -240,8 +290,10 @@ static void USART1_Deal(void *Rx_mesg)
         EventGroupSetBits(&Mesg_event, MesgEvent_Unlock);
         break;
     case r_SystemReset:
-        /* 本次只保留原普通复位，应用端进入串口升级的入口留待后续实现。 */
-        System_Reset();
+        if (data == OTA_REQUEST_MAGIC)
+            Board_EnterBootloader();
+        else
+            System_Reset();
         break;
     case r_DeviceStop:
         Ball_StopFlow();

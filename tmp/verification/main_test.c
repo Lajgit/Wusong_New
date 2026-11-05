@@ -15,6 +15,8 @@ static uint8_t sent[256][14];
 static UART_HandleTypeDef *sent_port[256];
 static uint32_t sent_count;
 static uint32_t resumed, displayed, resets;
+static uint32_t delay_total, backup_denied, reset_magic, reset_tick;
+static uint32_t motor_power_off, switch_power_off, reset_frames;
 Motor_Hoolle Motor_Hoolle1, Motor_Hoolle2;
 Motor_Card Card;
 Switch_Valve Lock_Valve;
@@ -38,7 +40,27 @@ HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, const uint8_t *b, uin
 void Hoolle_Output(Motor_Hoolle *m, uint16_t n) { m->Hoolle_num += n; }
 void Card_Output(Motor_Card *m, uint16_t n) { m->Card_num += n; }
 void ResumeSetting(void) { resumed++; }
-void System_Reset(void) { resets++; }
+void System_Reset(void)
+{
+    resets++;
+    reset_magic = RTC->BKP0R;
+    reset_tick = tick;
+    reset_frames = sent_count;
+}
+/* 仿真备份域访问成功/超时，并记录复位前的输出关闭和等待顺序。 */
+void HAL_PWR_EnableBkUpAccess(void) { if (backup_denied == 0U) PWR->CR |= PWR_CR_DBP; }
+void HAL_PWR_DisableBkUpAccess(void) { PWR->CR &= ~PWR_CR_DBP; }
+void HAL_Delay(uint32_t n) { delay_total += n; tick += n; }
+static void motor_off(void *self)
+{
+    if (self == &Motor_Hoolle1.Motor) motor_power_off |= 1U;
+    if (self == &Motor_Hoolle2.Motor) motor_power_off |= 2U;
+}
+static void switch_off(void *self)
+{
+    if (self == &Card.Switch) switch_power_off |= 1U;
+    if (self == &Lock_Valve.Switch) switch_power_off |= 2U;
+}
 void DigitalTube_SetDisplayNumber(uint32_t n) { displayed = n; }
 void SteelBall_MotorSwitch(uint8_t on) { Motor_Hoolle1.ManualRun = on; }
 
@@ -168,6 +190,42 @@ uint32_t test_main(void)
     request(&Rx1,1U,7U,1U,0U,0U,87U);
     before=sent_count;request(&Rx2,5U,2U,0U,0U,1U,86U);
     CHECK(sent_count==before+3U && sent[before+1U][4]==t_Hole && sent_port[before+2U]==&huart2 && sent[before+2U][4]==3U && sent[before+2U][10]==1U);
+    /* 普通F0和错误升级标记仍只执行原复位；备份域失败不得误复位。 */
+    request(&Rx1,1U,0xF0U,0U,0U,1U,88U);
+    CHECK(resets==1U && reset_magic==0U && delay_total==0U);
+    request(&Rx1,1U,0xF0U,0x424F5440U,0U,0U,89U);
+    CHECK(resets==2U && RTC->BKP0R==0U && motor_power_off==0U && switch_power_off==0U);
+    backup_denied=1U; before=sent_count;
+    request(&Rx1,1U,0xF0U,OTA_REQUEST_MAGIC,0U,1U,90U);
+    CHECK(resets==2U && RTC->BKP0R==0U && delay_total==0U);
+    CHECK(sent_count==before+1U && sent[before][3]==1U && sent[before][4]==0xF0U);
+    CHECK((PWR->CR & PWR_CR_DBP)==0U && motor_power_off==0U && switch_power_off==0U);
+    /* 从手动常转、流水灯和机构工作状态发起升级，验证实际关闭后才复位。 */
+    backup_denied=0U;
+    Motor_Hoolle1.Motor.LosePower=motor_off;
+    Motor_Hoolle2.Motor.LosePower=motor_off;
+    Card.Switch.off=switch_off; Lock_Valve.Switch.off=switch_off;
+    Motor_Hoolle1.ManualRun=1U;
+    Motor_Hoolle2.Motor.state=DEVICE_STATE_BUSY;
+    Card.Switch.state=DEVICE_STATE_BUSY; Lock_Valve.Switch.state=DEVICE_STATE_BUSY;
+    FlowCount=2U; FlowStarted=1U;
+    before=sent_count; tick=20000U;
+    request(&Rx1,1U,0xF0U,OTA_REQUEST_MAGIC,0U,1U,91U);
+    CHECK(resets==3U && reset_magic==OTA_REQUEST_MAGIC && RTC->BKP0R==OTA_REQUEST_MAGIC);
+    CHECK(delay_total==100U && reset_tick==20100U && reset_frames==sent_count);
+    CHECK(motor_power_off==3U && switch_power_off==3U && Motor_Hoolle1.ManualRun==0U);
+    CHECK(Motor_Hoolle2.Motor.state==DEVICE_STATE_IDLE && Card.Switch.state==DEVICE_STATE_IDLE && Lock_Valve.Switch.state==DEVICE_STATE_IDLE);
+    CHECK(FlowCount==0U && ChannelMask==0U && (PWR->CR & PWR_CR_DBP)==0U);
+    CHECK(sent_count==before+3U && sent_port[before]==&huart1 && sent[before][4]==0xF0U);
+    CHECK(sent_port[before+1U]==&huart2 && sent[before+1U][4]==BALL_CMD_CHANNEL_LIGHT && sent[before+1U][8]==0U);
+    CHECK(sent_port[before+2U]==&huart2 && sent[before+2U][3]==Board_to_Ball && sent[before+2U][4]==BALL_CMD_STOP && sent[before+2U][9]==1U);
+    /* 错误CRC及错误方向均不得触发升级，也不得写备份标记。 */
+    RTC->BKP0R=0U;
+    memcpy(f,sent[before],14U); f[11]^=1U;
+    feed(&Rx1,f,14U);
+    CHECK(resets==3U && RTC->BKP0R==0U);
+    request(&Rx1,Board_to_Android,0xF0U,OTA_REQUEST_MAGIC,0U,0U,92U);
+    CHECK(resets==3U && RTC->BKP0R==0U);
     for (uint32_t i=0; i<sent_count; i++)
         CHECK(CRC16_calculate(sent[i],11U) == (((uint16_t)sent[i][11]<<8)|sent[i][12]));
 finish:

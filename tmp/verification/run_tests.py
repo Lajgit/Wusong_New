@@ -29,6 +29,8 @@ for name,project,port,cpu,chip in [('main','Wusong','Port','Cortex-M4','STM32F40
     if p.returncode:print((p.stdout+p.stderr).decode('utf-8',errors='replace'));raise SystemExit(p.returncode)
     uc=Uc(UC_ARCH_ARM,UC_MODE_THUMB|UC_MODE_MCLASS)
     uc.mem_map(0x08000000,0x100000);uc.mem_map(0x20000000,0x20000);uc.mem_map(0x40000000,0x100000)
+    # RCC的RTC时钟使能使用位带别名；映射该页以执行真实寄存器写入指令。
+    uc.mem_map(0x42470000,0x1000)
     symbols={}
     with elf.open('rb') as stream:
         e=ELFFile(stream)
