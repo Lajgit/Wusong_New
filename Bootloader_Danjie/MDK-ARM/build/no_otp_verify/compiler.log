@@ -1,0 +1,24 @@
+>>> info
+
+Compiler Full Name: Component: ARM Compiler 5.05 update 1 (build 106)
+Compiler Version: 5.05
+Builder Mode: Rebuild
+The amount of C files: 36
+The amount of C++ files: 0
+The amount of Asm files: 1
+
+>>> prebuild
+
+
+
+>>> cc
+
+
+
+>>> ld
+
+Program Size: Code=20478 RO-data=458 RW-data=124 ZI-data=17452  
+
+
+>>> postbuild
+

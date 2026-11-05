@@ -1,0 +1,39 @@
+--cpu Cortex-M4.fp --library_type=microlib --scatter e:/单片机项目/ChatGPT单片机项目/弹界联网版/Bootloader_Danjie/MDK-ARM/build/Bootloader/Bootloader_F407.sct --strict --summary_stderr --info summarysizes --map --xref --callgraph --symbols --info sizes --info totals --info unused --info veneers
+--list .\build\no_otp_verify\Bootloader_F407.map
+.\build\no_otp_verify\.obj\__\App\Src\app_bootloader.o
+.\build\no_otp_verify\.obj\__\App\Src\app_sd.o
+.\build\no_otp_verify\.obj\__\App\Src\app_ws2812.o
+.\build\no_otp_verify\.obj\__\App\Src\fatfs_sd.o
+.\build\no_otp_verify\.obj\__\Core\Src\dma.o
+.\build\no_otp_verify\.obj\__\Core\Src\gpio.o
+.\build\no_otp_verify\.obj\__\Core\Src\main.o
+.\build\no_otp_verify\.obj\__\Core\Src\spi.o
+.\build\no_otp_verify\.obj\__\Core\Src\stm32f4xx_hal_msp.o
+.\build\no_otp_verify\.obj\__\Core\Src\stm32f4xx_it.o
+.\build\no_otp_verify\.obj\__\Core\Src\system_stm32f4xx.o
+.\build\no_otp_verify\.obj\__\Core\Src\tim.o
+.\build\no_otp_verify\.obj\__\Core\Src\usart.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_cortex.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_dma.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_dma_ex.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_exti.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash_ex.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash_ramfunc.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_gpio.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_pwr.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_pwr_ex.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_rcc.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_rcc_ex.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_spi.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_tim.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_tim_ex.o
+.\build\no_otp_verify\.obj\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_uart.o
+.\build\no_otp_verify\.obj\__\FATFS\App\fatfs.o
+.\build\no_otp_verify\.obj\__\FATFS\Target\user_diskio.o
+.\build\no_otp_verify\.obj\__\Middlewares\Third_Party\FatFs\src\diskio.o
+.\build\no_otp_verify\.obj\__\Middlewares\Third_Party\FatFs\src\ff.o
+.\build\no_otp_verify\.obj\__\Middlewares\Third_Party\FatFs\src\ff_gen_drv.o
+.\build\no_otp_verify\.obj\__\Middlewares\Third_Party\FatFs\src\option\syscall.o
+.\build\no_otp_verify\.obj\startup_stm32f407xx.o -o .\build\no_otp_verify\Bootloader_F407.axf
