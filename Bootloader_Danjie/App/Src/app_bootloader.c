@@ -147,7 +147,27 @@ static HAL_StatusTypeDef Flash_WriteUnlocked(uint32_t address, const uint8_t *da
     return HAL_OK;
 }
 
-/* 武松用板载指示灯反馈升级状态，其他板型继续使用各自原RGB提示。 */
+/* 复用微动板14字节协议：04/07设置场景，04/01以Data3/4控制12路灯。 */
+static void Boot_BallSend(uint8_t command, uint16_t data)
+{
+    static uint8_t id = 0U;
+    uint8_t frame[14] = {0xAAU, 0U, 0U, 0x04U, command, 0U, 0U,
+                         (uint8_t)(data >> 8U), (uint8_t)data, 0U, 0U, 0U, 0U, 0x55U};
+    uint16_t crc = 0xFFFFU;
+    frame[2] = ++id;
+    /* CRC16覆盖前11字节，高字节先发；提示帧不要求回显应答。 */
+    for (uint8_t i = 0U; i < 11U; i++)
+    {
+        crc ^= frame[i];
+        for (uint8_t bit = 0U; bit < 8U; bit++)
+            crc = (crc & 1U) != 0U ? (crc >> 1U) ^ 0xA001U : crc >> 1U;
+    }
+    frame[11] = (uint8_t)(crc >> 8U);
+    frame[12] = (uint8_t)crc;
+    HAL_UART_Transmit(&huart2, frame, sizeof(frame), 100U);
+}
+
+/* 武松等待/失败仍用板载灯，成功改用微动板；其他板型保留原RGB提示。 */
 void Boot_LightWaiting(void)
 {
     if (Boot_BoardGetId() == BOOT_BOARD_WUSONG)
@@ -158,7 +178,14 @@ void Boot_LightWaiting(void)
 void Boot_LightSuccess(void)
 {
     if (Boot_BoardGetId() == BOOT_BOARD_WUSONG)
+    {
         HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+        /* 先退出后台跟灯场景，避免微动扫描覆盖全亮；一秒后主动熄灭再交给APP。 */
+        Boot_BallSend(0x07U, 0x0001U);
+        Boot_BallSend(0x01U, 0x0FFFU);
+        HAL_Delay(1000U);
+        Boot_BallSend(0x01U, 0x0000U);
+    }
     else
         Light_SetAllColor(GREEN, RGB_buffer);
 }
@@ -604,7 +631,8 @@ static void OTA_HandleInstall(const OtaPacket_t *packet)
     Session.state = OTA_SESSION_INSTALLED;
     OTA_SendReply(packet->sequence, packet->command, OTA_RESULT_OK, metadata.version_code);
     Boot_LightSuccess();
-    HAL_Delay(1000U);
+    if (Boot_BoardGetId() != BOOT_BOARD_WUSONG)
+        HAL_Delay(1000U);
     NVIC_SystemReset();
 }
 
@@ -667,6 +695,8 @@ void JumpToApplication(void)
     entry = (AppEntry_t)(*(volatile uint32_t *)(APP_ADDR + 4U));
     __disable_irq();
     HAL_UART_DeInit(&huart1);
+    if (Boot_BoardGetId() == BOOT_BOARD_WUSONG)
+        HAL_UART_DeInit(&huart2);
     HAL_DeInit();
     SysTick->CTRL = 0U;
     SysTick->LOAD = 0U;
@@ -749,12 +779,16 @@ finish:
     if (programmed)
     {
         Boot_LightSuccess();
-        for (uint8_t i = 0U; i < 6U; i++)
+        /* 武松的一秒提示已在Boot_LightSuccess完成，其他板型保留原闪烁时序。 */
+        if (Boot_BoardGetId() != BOOT_BOARD_WUSONG)
         {
-            HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-            HAL_Delay(100U);
+            for (uint8_t i = 0U; i < 6U; i++)
+            {
+                HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+                HAL_Delay(100U);
+            }
+            HAL_Delay(400U);
         }
-        HAL_Delay(400U);
     }
     else
         Boot_LightError();
@@ -778,7 +812,8 @@ void App_Bootloader(void)
         if (Boot_InstallCachedImage() == HAL_OK)
         {
             Boot_LightSuccess();
-            HAL_Delay(1000U);
+            if (Boot_BoardGetId() != BOOT_BOARD_WUSONG)
+                HAL_Delay(1000U);
             JumpToApplication();
         }
         Boot_LightError();

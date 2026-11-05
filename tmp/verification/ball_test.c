@@ -144,6 +144,24 @@ uint32_t test_main(void)
     CHECK(BallScene==6U && latched==0x0200U);
     f[2]=124U;f[8]=12U;seal(f);feed(f,14U);CHECK(BallScene==6U && latched==0x0200U);
     f[2]=125U;f[8]=6U;seal(f);feed(f,14U);CHECK(latched==0x0200U);
+    /* 回放Bootloader成功提示的实际报文：压住微动也不能覆盖一秒全亮。 */
+    {
+        static const uint8_t success_frames[3][14] = {
+        {0xaaU,0x00U,0x01U,0x04U,0x07U,0x00U,0x00U,0x00U,0x01U,0x00U,0x00U,0x5dU,0x0eU,0x55U},
+        {0xaaU,0x00U,0x02U,0x04U,0x01U,0x00U,0x00U,0x0fU,0xffU,0x00U,0x00U,0x49U,0x1eU,0x55U},
+        {0xaaU,0x00U,0x03U,0x04U,0x01U,0x00U,0x00U,0x00U,0x00U,0x00U,0x00U,0xfdU,0x20U,0x55U}
+        };
+        f[2]=130U;f[4]=7U;f[8]=0U;seal(f);feed(f,14U);
+        tick++;Key_Task();CHECK(BallScene==BALL_SCENE_SETTING && latched==1U);
+        memcpy(f,success_frames[0],14U);feed(f,14U);
+        CHECK(BallScene==BALL_SCENE_IDLE);
+        memcpy(f,success_frames[1],14U);feed(f,14U);
+        tick++;Key_Task();CHECK(latched==0x0FFFU && BallLight_GetChannels()==0x0FFFU);
+        tick+=999U;Key_Task();CHECK(latched==0x0FFFU);
+        memcpy(f,success_frames[2],14U);feed(f,14U);
+        tick++;Key_Task();CHECK(latched==0U && GameChannelMask==0U);
+        CHECK(ValveActive[0]==0U && ValveActive[1]==0U && ValveActive[2]==0U);
+    }
     for(uint32_t i=0;i<sent_count;i++) CHECK(CRC16_calculate(sent[i],11U)==(((uint16_t)sent[i][11]<<8)|sent[i][12]));
 finish:
     __asm { BKPT 0 }

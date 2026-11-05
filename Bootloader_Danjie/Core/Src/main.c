@@ -98,8 +98,10 @@ int main(void)
   MX_SPI1_Init();
   MX_FATFS_Init();
   MX_USART1_UART_Init();
-  /* 武松主控没有RGB，跳过旧灯效定时器，避免占用新板GPIO。 */
-  if (Boot_BoardGetId() != BOOT_BOARD_WUSONG)
+  /* 武松使用微动板通道灯提示升级成功，其他板型保留RGB定时器。 */
+  if (Boot_BoardGetId() == BOOT_BOARD_WUSONG)
+    MX_USART2_UART_Init();
+  else
     MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(10);

@@ -8,12 +8,14 @@
 static uint32_t checks,failed_line,erase_count,program_count,rgb_calls;
 static uint8_t image[129],serial_rx[1100],serial_tx[1100];
 static uint32_t serial_length,serial_offset,tx_length,sd_offset,sd_size=129U;
+static uint8_t ball_frames[16][14];
+static uint32_t ball_ticks[16],ball_count,tick,led_toggles,reset_count;
 static uint8_t sd_present=1U;
 static uint16_t led_state;
 static uint32_t sector_start[13]={0x08000000,0x08004000,0x08008000,0x0800C000,0x08010000,0x08020000,0x08040000,0x08060000,0x08080000,0x080A0000,0x080C0000,0x080E0000,0x08100000};
 FATFS fs;
 uint8_t r_buffer[1024];
-UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart1,huart2;
 RGB_t Color_table[10];
 HAL_StatusTypeDef HAL_DeInit(void) { return HAL_OK; }
 HAL_StatusTypeDef HAL_UART_DeInit(UART_HandleTypeDef *h) { return HAL_OK; }
@@ -36,15 +38,26 @@ HAL_StatusTypeDef HAL_FLASHEx_Erase(FLASH_EraseInitTypeDef *e,uint32_t *error)
     return HAL_OK;
 }
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h,const uint8_t *b,uint16_t n,uint32_t timeout)
-{ memcpy(serial_tx,b,n);tx_length=n;return HAL_OK; }
+{
+    if(h==&huart2)
+    {
+        if(n==14U && ball_count<16U)
+        {
+            memcpy(ball_frames[ball_count],b,n);
+            ball_ticks[ball_count++]=tick;
+        }
+        return HAL_OK;
+    }
+    memcpy(serial_tx,b,n);tx_length=n;return HAL_OK;
+}
 HAL_StatusTypeDef HAL_UART_Receive(UART_HandleTypeDef *h,uint8_t *b,uint16_t n,uint32_t timeout)
 {
     if(serial_offset+n>serial_length) return HAL_TIMEOUT;
     memcpy(b,serial_rx+serial_offset,n);serial_offset+=n;return HAL_OK;
 }
 void HAL_GPIO_WritePin(GPIO_TypeDef *p,uint16_t pin,GPIO_PinState state) { led_state=state; }
-void HAL_GPIO_TogglePin(GPIO_TypeDef *p,uint16_t pin) { led_state=!led_state; }
-void HAL_Delay(uint32_t ms) {}
+void HAL_GPIO_TogglePin(GPIO_TypeDef *p,uint16_t pin) { led_state=!led_state;led_toggles++; }
+void HAL_Delay(uint32_t ms) { tick+=ms; }
 void Light_SetAllColor(RGB_t c,uint16_t *b) { rgb_calls++; }
 FRESULT mount_disk(FATFS *f,const TCHAR *p,BYTE o) { return FR_OK; }
 FRESULT f_mount(FATFS *f,const TCHAR *p,BYTE o) { return FR_OK; }
@@ -62,20 +75,37 @@ FRESULT read_file(FIL *f,void *buffer,UINT count,UINT *got)
 FRESULT f_lseek(FIL *f,FSIZE_t offset) { sd_offset=offset;return FR_OK; }
 FRESULT close_file(FIL *f) { return FR_OK; }
 
+/* 只拦截系统复位，允许执行实际INSTALL处理函数并核对复位前的一秒提示。 */
+static void test_system_reset(void) { reset_count++; }
+#undef NVIC_SystemReset
+#define NVIC_SystemReset test_system_reset
 #include "../../Bootloader_Danjie/App/Src/app_bootloader.c"
 #define CHECK(x) do { checks++; if(!(x)) { failed_line=__LINE__;goto finish; } } while(0)
 
 uint32_t test_main(void)
 {
+    /* 固定线上报文同时验证ID、方向、数据位置、ACK位和CRC16高低字节。 */
+    static const uint8_t success_frames[3][14] = {
+        {0xaaU,0x00U,0x01U,0x04U,0x07U,0x00U,0x00U,0x00U,0x01U,0x00U,0x00U,0x5dU,0x0eU,0x55U},
+        {0xaaU,0x00U,0x02U,0x04U,0x01U,0x00U,0x00U,0x0fU,0xffU,0x00U,0x00U,0x49U,0x1eU,0x55U},
+        {0xaaU,0x00U,0x03U,0x04U,0x01U,0x00U,0x00U,0x00U,0x00U,0x00U,0x00U,0xfdU,0x20U,0x55U}
+    };
     OtaPacket_t packet={0};OtaMetadata_t metadata;
-    uint32_t crc,before;
+    uint32_t crc,before,before_frames,before_tick;
     memset((void *)0x08008000U,0xA5U,0x100U);
     memset((void *)0x080A0000U,0xFFU,0x40000U);
     memset((void *)0x080E0000U,0x5AU,0x100U);
     CHECK(Boot_BoardGetId()==BOOT_BOARD_WUSONG);
     CHECK(strcmp(Boot_BoardGetFirmwareFileName(),"wusong.bin")==0);
     Boot_LightWaiting();CHECK(led_state==GPIO_PIN_RESET);
-    Boot_LightSuccess();Boot_LightError();CHECK(rgb_calls==0U && led_state==GPIO_PIN_SET);
+    Boot_LightError();CHECK(rgb_calls==0U && led_state==GPIO_PIN_SET && ball_count==0U);
+    Boot_LightSuccess();
+    CHECK(ball_count==3U && tick==1000U && led_toggles==0U && rgb_calls==0U);
+    CHECK(ball_frames[0][3]==4U && ball_frames[0][4]==7U && ball_frames[0][8]==1U);
+    CHECK(ball_frames[1][4]==1U && ball_frames[1][7]==0x0FU && ball_frames[1][8]==0xFFU);
+    CHECK(ball_frames[2][4]==1U && ball_frames[2][7]==0U && ball_frames[2][8]==0U);
+    CHECK(ball_ticks[2]-ball_ticks[1]==1000U && ball_ticks[1]==ball_ticks[0]);
+    CHECK(memcmp(ball_frames,success_frames,sizeof(success_frames))==0);
     CHECK(CRC32_Calculate((const uint8_t *)"123456789",9U)==0xCBF43926U);
     for(uint32_t i=0U;i<sizeof(image);i++) image[i]=(uint8_t)i;
     WriteU32LE(image,0x20010000U);WriteU32LE(image+4U,APP_ADDR+0x41U);
@@ -99,14 +129,28 @@ uint32_t test_main(void)
     CHECK(Boot_InstallCachedImage()==HAL_OK && Boot_AppIsValid());
     CHECK(memcmp((void *)APP_ADDR,image,sizeof(image))==0 && Boot_ReadMetadata(&metadata) && metadata.state==OTA_META_INSTALLED);
     CHECK(*(uint32_t *)0x08008000U==0xA5A5A5A5U && *(uint32_t *)0x080E0000U==0x5A5A5A5AU);
+    before_frames=ball_count;before_tick=tick;
     sd_present=0U;before=erase_count;CHECK(!Boot_TrySdUpgrade() && erase_count==before);
     sd_present=1U;sd_size=APP_MAX_SIZE+1U;CHECK(!Boot_TrySdUpgrade() && erase_count==before);
     sd_size=sizeof(image);WriteU32LE(image+4U,0x08004041U);
     before=erase_count;CHECK(!Boot_TrySdUpgrade() && erase_count==before && Boot_AppIsValid());
+    CHECK(ball_count==before_frames && tick==before_tick);
     WriteU32LE(image+4U,APP_ADDR+0x41U);
     memset((void *)APP_ADDR,0,256U);CHECK(Boot_TrySdUpgrade());
+    CHECK(ball_count==before_frames+3U && tick-before_tick==1000U && led_toggles==0U);
     CHECK(memcmp((void *)APP_ADDR,image,sizeof(image))==0 && ((uint8_t *)APP_ADDR)[129]==0xFFU);
     CHECK(*(uint32_t *)0x08008000U==0xA5A5A5A5U && *(uint32_t *)0x080E0000U==0x5A5A5A5AU && rgb_calls==0U);
+    before_frames=ball_count;before_tick=tick;
+    packet.command=OTA_CMD_INSTALL;packet.payload_length=0U;
+    OTA_HandleInstall(&packet);
+    CHECK(reset_count==1U && Session.state==OTA_SESSION_INSTALLED && serial_tx[9]==OTA_RESULT_OK);
+    CHECK(ball_count==before_frames+3U && tick-before_tick==1000U && led_toggles==0U);
+    /* 缓存损坏导致安装失败时不发送成功提示，也不延时或复位。 */
+    before_frames=ball_count;before_tick=tick;
+    *(volatile uint8_t *)OTA_CACHE_ADDR^=1U;
+    OTA_HandleInstall(&packet);
+    CHECK(ball_count==before_frames && tick==before_tick && reset_count==1U);
+    CHECK(serial_tx[9]==OTA_RESULT_INSTALL_FAILED && led_state==GPIO_PIN_SET);
     /* 验证Bootloader串口帧解析及错误CRC拒绝，不接入应用端升级入口。 */
     serial_rx[0]=0xAA;serial_rx[1]=0x5A;serial_rx[2]=1;serial_rx[3]=OTA_CMD_HELLO;
     WriteU16LE(serial_rx+4U,55U);WriteU16LE(serial_rx+6U,0U);
