@@ -41,6 +41,9 @@ void Communicate_Tx_Init(Tx_HandleTypeDef *Handle, Tx_InitTypeDef Tx_Init)
 void Rx_Receive(void *self, void *mesg, uint8_t mesg_len)
 {
     Rx_HandleTypeDef *rx = (Rx_HandleTypeDef *)self;
+    /* 接收长度必须落在解包缓冲区内，后续固定按该长度收帧和复制。 */
+    if (mesg == NULL || mesg_len < 2U || mesg_len > sizeof(rx->Queue.Buf))
+        return;
     while (rx->Handle.RingBuf.f_IsEmpty(&rx->Handle.RingBuf) == false)
     {
         /// 从环形缓冲区中读取一个字节，并根据当前状态进行处理
@@ -58,36 +61,34 @@ void Rx_Receive(void *self, void *mesg, uint8_t mesg_len)
                     rx->Queue.Index++;
                 }
                 break;
-            /// 接收数据阶段，收满固定帧长后再检查帧尾
+            /// 固定14字节帧：数据和CRC中的0xAA/0x55不能提前结束一帧。
             case RECEIVE_DATA:
-                // 若队列未满，继续存储数据；否则放弃当前帧并重同步
-                if (rx->Queue.Index < rx->Queue.Buf_Size)
-                    rx->Queue.Buf[rx->Queue.Index] = rx->CurrData;
-                else
-                    rx->State = WAIT_HEAD;
-                // 协议固定14字节，ID/数据/CRC中的0x55是合法内容，不能提前结束接收。
-                // 仅在第14字节检查帧尾，错误帧丢弃；拷贝长度仍固定，避免长帧越界。
-                if (rx->Queue.Index == mesg_len - 1)
+                rx->Queue.Buf[rx->Queue.Index++] = rx->CurrData;
+                if (rx->Queue.Index == mesg_len)
                 {
                     rx->State = WAIT_HEAD;
-                    if (rx->CurrData == rx->Frame_Tail)
+                    memcpy(mesg, rx->Queue.Buf, mesg_len);
+                    if (rx->CurrData == rx->Frame_Tail &&
+                        (rx->Verify == NULL || rx->Verify(rx, mesg)))
                     {
-                        memcpy(mesg, rx->Queue.Buf, mesg_len);
-                        /// 解包并处理
-                        if (rx->Verify != NULL)
+                        if (rx->Deal != NULL)
+                            rx->Deal(mesg);
+                    }
+                    else
+                    {
+                        /* 丢字节/坏CRC后保留下一帧可能的帧头。 */
+                        for (uint8_t i = 1U; i < mesg_len; i++)
                         {
-                            if (rx->Verify(rx, mesg) == true)
-                                if (rx->Deal != NULL)
-                                    rx->Deal(mesg);
-                        }
-                        else
-                        {
-                            if (rx->Deal != NULL)
-                                rx->Deal(mesg);
+                            if (rx->Queue.Buf[i] == rx->Frame_Head)
+                            {
+                                rx->Queue.Index = mesg_len - i;
+                                memmove(rx->Queue.Buf, &rx->Queue.Buf[i], rx->Queue.Index);
+                                rx->State = RECEIVE_DATA;
+                                break;
+                            }
                         }
                     }
                 }
-                rx->Queue.Index++;
                 break;
             }
         }

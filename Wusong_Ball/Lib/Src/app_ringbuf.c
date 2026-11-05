@@ -11,10 +11,7 @@ static bool RingBuffer_IsEmpty(void *RB)
     RingBuffer_t *rb = (RingBuffer_t *)RB;
     if (rb == NULL)
         return true;
-    if (rb->Write_index >= rb->Read_index)
-        rb->Count = rb->Write_index - rb->Read_index;
-    else
-        rb->Count = rb->Write_index + rb->Size - rb->Read_index;
+    /* 索引重合既可能为空也可能为满，必须使用实际字节计数区分。 */
     return (rb->Count == 0);
 }
 
@@ -28,10 +25,6 @@ static bool RingBuffer_IsFull(void *RB)
     RingBuffer_t *rb = (RingBuffer_t *)RB;
     if (rb == NULL)
         return true;
-    if (rb->Write_index >= rb->Read_index)
-        rb->Count = rb->Write_index - rb->Read_index;
-    else
-        rb->Count = rb->Write_index + rb->Size - rb->Read_index;
     return (rb->Count == rb->Size);
 }
 
@@ -43,10 +36,6 @@ static bool RingBuffer_IsFull(void *RB)
 static uint16_t RingBuffer_GetSpace(void *RB)
 {
     RingBuffer_t *rb = (RingBuffer_t *)RB;
-    if (rb->Write_index >= rb->Read_index)
-        rb->Count = rb->Write_index - rb->Read_index;
-    else
-        rb->Count = rb->Write_index + rb->Size - rb->Read_index;
     return rb->Size - rb->Count;
 }
 
@@ -60,10 +49,6 @@ static uint16_t RingBuffer_GetDatalen(void *RB)
     RingBuffer_t *rb = (RingBuffer_t *)RB;
     if (rb == NULL)
         return 0;
-    if (rb->Write_index >= rb->Read_index)
-        rb->Count = rb->Write_index - rb->Read_index;
-    else
-        rb->Count = rb->Write_index + rb->Size - rb->Read_index;
     return rb->Count;
 }
 
@@ -99,13 +84,33 @@ static bool RingBuffer_WriteByte(void *RB, uint8_t data)
 static bool RingBuffer_ReadByte(void *RB, uint8_t *data)
 {
     RingBuffer_t *rb = (RingBuffer_t *)RB;
+    uint32_t primask;
+
     if (rb == NULL || data == NULL)
         return false;
-    if (RingBuffer_IsEmpty(rb))
+
+    /*
+     * RingBuffer_WriteByte() 会在 UART 接收中断中修改
+     * Write_index 和 Count。
+     *
+     * 读取端必须保证“判空、读取、更新 Read_index、Count--”
+     * 是一个不可被 UART 中断打断的完整操作。
+     */
+    primask = __get_PRIMASK();
+    __disable_irq();
+
+    if (rb->Count == 0)
+    {
+        __set_PRIMASK(primask);
         return false;
+    }
+
     *data = rb->Buffer[rb->Read_index];
-    rb->Read_index = (rb->Read_index + 1) % rb->Size;
+    rb->Read_index = (rb->Read_index + 1U) % rb->Size;
     rb->Count--;
+
+    __set_PRIMASK(primask);
+
     return true;
 }
 
