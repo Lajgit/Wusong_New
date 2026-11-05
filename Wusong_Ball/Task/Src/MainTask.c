@@ -3,7 +3,6 @@
 #include "InterruptTask.h"
 #include "KeyTask.h"
 #include "LightTask.h"
-#include "DigitalTubeTask.h"
 #include "port_event.h"
 #include "iwdg.h"
 
@@ -23,7 +22,7 @@ static void SystemLight_Task(void)
 
     if ((uint32_t)(HAL_GetTick() - time) > SYSLIGHT_BLINK_TIME)
     {
-        /* 中文注释：球盘User_Led实际接PA15，每500ms翻转一次GPIO。 */
+        /* 中文注释：微动板User_Led实际接PA1，每500ms翻转一次GPIO。 */
         HAL_GPIO_TogglePin(User_Led_GPIO_Port, User_Led_Pin);
         time = HAL_GetTick();
     }
@@ -31,11 +30,11 @@ static void SystemLight_Task(void)
 
 void Main_Init(void)
 {
-    /* 中文注释：球盘只初始化主板通信、7路光眼、5颗RGB灯和两块外接数码管。 */
+    /* 微动板只运行串口、12路微动、2路洞口、通道灯和3路定时阀。 */
     CommInit();
     KeyAll_Init();
     Light_Init();
-    DigitalTubeTask_Init();
+
 }
 
 void Main_Task(void)
@@ -46,7 +45,7 @@ void Main_Task(void)
     HAL_IWDG_Refresh(&hiwdg);
     Light_Task();
     HAL_IWDG_Refresh(&hiwdg);
-    DigitalTube_Task();
+    BallValve_Task();
     HAL_IWDG_Refresh(&hiwdg);
-    // SystemLight_Task();
+    SystemLight_Task();
 }

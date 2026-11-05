@@ -11,14 +11,18 @@
 #define Ball_to_Board 0x05U
 
 #define BALL_CMD_VERSION 0x00U
-#define BALL_CMD_DIGITAL_TUBE 0x01U
-#define BALL_CMD_RGB_MODE 0x02U
-#define BALL_CMD_BRIGHTNESS 0x04U
-
+#define BALL_CMD_CHANNEL_LIGHT 0x01U
+#define BALL_CMD_VALVE 0x02U
+#define BALL_CMD_HOLE_VALVE 0x03U // 补充位0按左右直接推出，补充位1且Data4=0条件成对清洞
+#define BALL_CMD_SCENE 0x07U // Data4=0为后台，退出后台恢复游戏掩码
+#define BALL_CMD_STOP 0xFFU
 #define BALL_REPORT_VERSION 0x00U
-#define BALL_REPORT_EYE 0x01U
+#define BALL_REPORT_SWITCH 0x01U // Data4=J1~J12编号00~0B，补充位0/1为未中奖/中奖
+#define BALL_REPORT_HOLE 0x02U
 
-#define BALL_EYE_TRIGGER 0x01U
+#define BALL_SCENE_SETTING 0x00U
+#define BALL_SCENE_IDLE 0x01U
+#define BALL_SCENE_END 0x0BU
 
 typedef struct
 {
@@ -39,7 +43,9 @@ typedef struct
 } Mesg_TypeDef;
 
 uint8_t Comm_SendMesg_FillData(Tx_HandleTypeDef *Tx, uint8_t code_1, uint8_t code_2, uint32_t data, uint8_t expandCode);
+void BallValve_Task(void);
 void CommInit(void);
 void CommTask(void);
+extern uint8_t BallScene;
 
 #endif

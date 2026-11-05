@@ -398,11 +398,6 @@
               <FilePath>../Core/Src/gpio.c</FilePath>
             </File>
             <File>
-              <FileName>dma.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../Core/Src/dma.c</FilePath>
-            </File>
-            <File>
               <FileName>iwdg.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/iwdg.c</FilePath>
@@ -466,11 +461,6 @@
               <FileName>spi.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/spi.c</FilePath>
-            </File>
-            <File>
-              <FileName>tim.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../Core/Src/tim.c</FilePath>
             </File>
             <File>
               <FileName>usart.c</FileName>
@@ -721,11 +711,6 @@
               <FileName>CommTask.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Task\Src\CommTask.c</FilePath>
-            </File>
-            <File>
-              <FileName>DigitalTubeTask.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Task\Src\DigitalTubeTask.c</FilePath>
             </File>
             <File>
               <FileName>FlashTask.c</FileName>

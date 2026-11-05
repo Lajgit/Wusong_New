@@ -1,73 +1,93 @@
 #include "KeyTask.h"
 #include "CommTask.h"
 #include "main.h"
+#include "LightTask.h"
 
-#define BALL_EYE_COUNT 7U
-#define BALL_EYE_SCAN_MS 3U
+#define SWITCH_COUNT 12U
+#define SWITCH_SCAN_MS 1U
+#define SWITCH_DEBOUNCE_MS 15U
+#define HOLE_CONFIRM_MS 200U
 
-/*
- * 中文注释：沿用旧模板KeyTask文件名以避免修改工程结构。
- * 实际任务改为扫描球盘7路光眼：PB3~PB7五路 + PA4/PA5的FB1/FB2两路。
- * 协议表当前写编号1~6，但硬件实际保留7路：1~5为本板光眼，6~7为两块外接数码管模块反馈。
- */
-static GPIO_TypeDef *BallEye_Port[BALL_EYE_COUNT] = {
-    BallEye1_GPIO_Port,
-    BallEye2_GPIO_Port,
-    BallEye3_GPIO_Port,
-    BallEye4_GPIO_Port,
-    BallEye5_GPIO_Port,
-    BallEyeFB1_GPIO_Port,
-    BallEyeFB2_GPIO_Port,
+/* 数组下标直接对应协议编号00~0B，物理接口依次为J1~J12。 */
+static GPIO_TypeDef *SwitchPort[SWITCH_COUNT] = {
+    GPIOA, GPIOA, GPIOA, GPIOA, GPIOA, GPIOA,
+    GPIOA, GPIOA, GPIOA, GPIOB, GPIOB, GPIOB
 };
-
-static uint16_t BallEye_Pin[BALL_EYE_COUNT] = {
-    BallEye1_Pin,
-    BallEye2_Pin,
-    BallEye3_Pin,
-    BallEye4_Pin,
-    BallEye5_Pin,
-    BallEyeFB1_Pin,
-    BallEyeFB2_Pin,
+static const uint16_t SwitchPin[SWITCH_COUNT] = {
+    GPIO_PIN_3, GPIO_PIN_4, GPIO_PIN_5, GPIO_PIN_6, GPIO_PIN_7, GPIO_PIN_8,
+    GPIO_PIN_11, GPIO_PIN_12, GPIO_PIN_15, GPIO_PIN_3, GPIO_PIN_4, GPIO_PIN_5
 };
-
-static GPIO_PinState BallEye_LastState[BALL_EYE_COUNT];
+static GPIO_PinState SwitchRaw[SWITCH_COUNT];
+static GPIO_PinState SwitchStable[SWITCH_COUNT];
+static uint32_t SwitchTick[SWITCH_COUNT];
+static uint8_t SwitchWin[SWITCH_COUNT];
+static uint32_t HoleTick[2];
+static uint8_t HoleTracking[2];
+static uint8_t HoleReported[2];
 extern Tx_HandleTypeDef Tx;
 
 void KeyAll_Init(void)
 {
-    for (uint8_t i = 0U; i < BALL_EYE_COUNT; i++)
-        BallEye_LastState[i] = HAL_GPIO_ReadPin(BallEye_Port[i], BallEye_Pin[i]);
+    for (uint8_t i = 0U; i < SWITCH_COUNT; i++)
+    {
+        SwitchRaw[i] = HAL_GPIO_ReadPin(SwitchPort[i], SwitchPin[i]);
+        SwitchStable[i] = GPIO_PIN_SET;
+        SwitchTick[i] = HAL_GetTick();
+    }
 }
 
 void Key_Task(void)
 {
-    static uint32_t LastScanTick = 0U;
-    uint32_t CurrentTick = HAL_GetTick();
-
-    if ((uint32_t)(CurrentTick - LastScanTick) < BALL_EYE_SCAN_MS)
+    static uint32_t scan_tick = 0U;
+    uint32_t now = HAL_GetTick();
+    uint16_t diagnostic_mask = 0U;
+    if ((uint32_t)(now - scan_tick) < SWITCH_SCAN_MS)
         return;
-
-    LastScanTick = CurrentTick;
-
-    for (uint8_t i = 0U; i < BALL_EYE_COUNT; i++)
+    scan_tick = now;
+    for (uint8_t i = 0U; i < SWITCH_COUNT; i++)
     {
-        GPIO_PinState CurrentState = HAL_GPIO_ReadPin(BallEye_Port[i], BallEye_Pin[i]);
-
-        /*
-         * 中文注释：当前光眼电路为光敏三极管集电极上拉。
-         * 正常收到红外时三极管导通，GPIO为低；钢珠遮挡后GPIO变高。
-         * 因此仅在低→高边沿上报一次，避免钢珠停留遮挡时重复发送。
-         */
-        if (BallEye_LastState[i] == GPIO_PIN_RESET && CurrentState == GPIO_PIN_SET)
+        GPIO_PinState state = HAL_GPIO_ReadPin(SwitchPort[i], SwitchPin[i]);
+        if (state == GPIO_PIN_RESET)
+            diagnostic_mask |= (uint16_t)(1U << i);
+        if (state != SwitchRaw[i])
         {
-            Comm_SendMesg_FillData(
-                &Tx,
-                Ball_to_Board,
-                BALL_REPORT_EYE,
-                (uint32_t)(i + 1U),
-                BALL_EYE_TRIGGER);
+            /* 在原始闭合边沿锁存灯态，消抖或串口传输期间推进流水灯不改变结果。 */
+            if (state == GPIO_PIN_RESET)
+                SwitchWin[i] = (BallLight_GetChannels() & (1U << i)) != 0U ? 1U : 0U;
+            SwitchRaw[i] = state;
+            SwitchTick[i] = now;
         }
-
-        BallEye_LastState[i] = CurrentState;
+        if (state != SwitchStable[i] && (uint32_t)(now - SwitchTick[i]) >= SWITCH_DEBOUNCE_MS)
+        {
+            SwitchStable[i] = state;
+            /* 闭合只报一次，长时间压住不重复上报；松开消抖后才重新使能。 */
+            if (state == GPIO_PIN_RESET)
+                Comm_SendMesg_FillData(&Tx, Ball_to_Board, BALL_REPORT_SWITCH, i, SwitchWin[i]);
+        }
+    }
+    /* 后台灯跟随实时触点；游戏上报仍走上方15ms消抖，且不覆盖主控游戏掩码。 */
+    if (BallScene == BALL_SCENE_SETTING && BallLight_GetChannels() != diagnostic_mask)
+        BallLight_SetChannels(diagnostic_mask);
+    for (uint8_t i = 0U; i < 2U; i++)
+    {
+        if (HAL_GPIO_ReadPin(GPIOB, i == 0U ? Hole_Left_Pin : Hole_Right_Pin) == GPIO_PIN_SET)
+        {
+            if (HoleTracking[i] == 0U)
+            {
+                HoleTick[i] = now;
+                HoleTracking[i] = 1U;
+            }
+            /* 洞口需连续有效200ms才上报，持续占用只报一次，解除后才重新使能。 */
+            if (HoleReported[i] == 0U && (uint32_t)(now - HoleTick[i]) >= HOLE_CONFIRM_MS)
+            {
+                Comm_SendMesg_FillData(&Tx, Ball_to_Board, BALL_REPORT_HOLE, i, 0U);
+                HoleReported[i] = 1U;
+            }
+        }
+        else
+        {
+            HoleTracking[i] = 0U;
+            HoleReported[i] = 0U;
+        }
     }
 }

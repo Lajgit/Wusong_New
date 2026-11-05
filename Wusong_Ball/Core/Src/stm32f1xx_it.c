@@ -9,11 +9,9 @@
 #include "main.h"
 #include "stm32f1xx_it.h"
 /* USER CODE BEGIN Includes */
-#include "port_lighteffect.h"
-#include "tim.h"
 /* USER CODE END Includes */
 
-extern UART_HandleTypeDef huart2;
+extern UART_HandleTypeDef huart1;
 
 void NMI_Handler(void)
 {
@@ -64,18 +62,15 @@ void PendSV_Handler(void)
 
 void SysTick_Handler(void)
 {
+  /* 仅维护毫秒时基，供输入消抖和本地电磁阀时序使用。 */
   HAL_IncTick();
-  LightEffectTimer_ISR();
+
 }
 
-void DMA1_Channel6_IRQHandler(void)
-{
-  /* 仅交给 HAL 分发完成/错误回调，不再用 DMA 中断使能位判断传输完成。 */
-  HAL_DMA_IRQHandler(&hdma_tim3_ch1_trig);
-}
 
-void USART2_IRQHandler(void)
+
+void USART1_IRQHandler(void)
 {
-  /* 中文注释：USART2负责接收主板下发的球盘协议。 */
-  HAL_UART_IRQHandler(&huart2);
+  /* 中文注释：USART1负责接收主板下发的球盘协议。 */
+  HAL_UART_IRQHandler(&huart1);
 }

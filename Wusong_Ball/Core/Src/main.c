@@ -7,9 +7,7 @@
   */
 /* USER CODE END Header */
 #include "main.h"
-#include "dma.h"
 #include "iwdg.h"
-#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -24,12 +22,10 @@ int main(void)
   HAL_Init();
   SystemClock_Config();
 
+  /* 新板无RGB和数码管，不初始化模板TIM3/DMA，PA6保持J4微动输入。 */
   MX_GPIO_Init();
-  /* 球盘 PA6 恢复 TIM3_CH1 PWM/DMA 发送，先使能 DMA 时钟再初始化定时器。 */
-  MX_DMA_Init();
-  MX_TIM3_Init();
-  /* 中文注释：球盘与主板固定使用USART2/PA2/PA3。 */
-  MX_USART2_UART_Init();
+  /* 微动板J14经USART1/PA9/PA10与主控USART2通信。 */
+  MX_USART1_UART_Init();
   MX_IWDG_Init();
 
   Main_Init();
