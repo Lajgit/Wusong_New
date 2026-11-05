@@ -243,6 +243,9 @@ void SteelBall_MotorSwitch(uint8_t enable)
 void Card_Output(Motor_Card *Switch, uint16_t num)
 {
     Switch->Card_num += num;
+    /* 保持原武松行为：零数量的恢复输出请求也通知安卓吐卡完成。 */
+    if (num == 0U)
+        EventGroupSetBits(&Mesg_event, MesgEvent_CardOutputFinish);
     if (Switch->Card_num != 0)
     {
         Switch->Switch.state = DEVICE_STATE_START;
@@ -356,6 +359,7 @@ void CtrlTask(void)
     /*==============卡片机控制===============*/
     Ctrl_CardMotor(&Card, CardMotorTimeout_time, CardMotorTimeout_callback);
     /*==============电子锁控制===============*/
-    Ctrl_Valve(&Lock_Valve, ValveTimeout_time, NULL);
+    /* 主控电子锁保持原2000ms动作时间，球盘三阀时序由微动板独立管理。 */
+    Ctrl_Valve(&Lock_Valve, 2000U, NULL);
     // Servo_AutoRun(&Servo1, 75);//舵机1自动摆动
 }

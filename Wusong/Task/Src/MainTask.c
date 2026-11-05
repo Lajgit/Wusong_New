@@ -11,11 +11,12 @@
 
 #define SYSLIGHT_BLINK_TIME 500
 
-/* 兼容旧工程中仍参与编译但已退出运行路径的灯效模块，第二阶段删除对应工程项后再移除。 */
+/* 保留模板枚举供原工程编译，实际游戏场景按原武松SCENE_*编号处理。 */
 Scene_t Scene = IdleScene;
 Event_Handle_t Event;
 
 extern Tx_HandleTypeDef Tx3;
+extern Tx_HandleTypeDef Tx2;
 
 void System_Reset(void)
 {
@@ -44,31 +45,11 @@ void Main_Init(void)
     /* 中文注释：主板本地数码管继续保留，控台数码管通过USART3同步接收显示数据。 */
     DigitalTubeTask_Init();
 
-    /*
-     * 控台上电初始化沿用小丑协议：
-     * 0x00请求版本，0x02灯带亮度，0x03场景，0x04控台亮度。
-     */
-    Comm_SendMesg_FillData(&Tx3, Board_to_Ctrl, CTRL_CMD_GET_VERSION, 0x00, 0x00);
+    /* 新板无RGB，查询从板版本并同步微动板初始场景。 */
+    Comm_SendMesg_FillData(&Tx3, Board_to_Ctrl, CTRL_CMD_GET_VERSION, 0U, 0U);
+    Comm_SendMesg_FillData(&Tx2, Board_to_Ball, BALL_CMD_VERSION, 0U, 0U);
+    Ball_SendScene((uint8_t)Scene);
 
-    if (Setting.LightBelt_Lightness <= CTRL_BRIGHTNESS_MAX)
-        Comm_SendMesg_FillData(&Tx3,
-                               Board_to_Ctrl,
-                               CTRL_CMD_LIGHT_BELT_BRIGHTNESS,
-                               Setting.LightBelt_Lightness,
-                               0x00);
-
-    Comm_SendMesg_FillData(&Tx3,
-                           Board_to_Ctrl,
-                           CTRL_CMD_LIGHT_SCENE,
-                           0x00,
-                           (uint8_t)Scene);
-
-    if (Setting.Ctrl_Lightness <= CTRL_BRIGHTNESS_MAX)
-        Comm_SendMesg_FillData(&Tx3,
-                               Board_to_Ctrl,
-                               CTRL_CMD_BRIGHTNESS,
-                               Setting.Ctrl_Lightness,
-                               0x00);
 }
 
 void Main_Task(void)

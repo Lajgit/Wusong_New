@@ -24,6 +24,19 @@ typedef enum
     PlayingScene = 2,
     LittleGame_1 = 3,
     LittleGame_2 = 4,
+    /* 以下为原武松安卓场景编号，不能使用模板PlayingScene=2代替游玩场景6。 */
+    SCENE_SETTING = 0,
+    SCENE_IDLE = 1,
+    SCENE_RANDOM = 2,
+    SCENE_HOOLLE_INPUT = 3,
+    SCENE_PUBLIC_RATIO = 4,
+    SCENE_ADDITIONAL = 5,
+    SCENE_PLAYING = 6,
+    SCENE_VICTORY = 7,
+    SCENE_DEFEAT = 8,
+    SCENE_HAPPY1 = 9,
+    SCENE_HAPPY2 = 10,
+    SCENE_END = 11,
 } Scene_t;
 
 void System_Reset(void);

@@ -71,66 +71,30 @@ void Mesg_Task(void)
         EventGroupClearBits(&Mesg_event, MesgEvent_CoinInput);
     }
 
-    /*
-     * 中文注释：0x07出货超时使用ExpandCode区分通道：
-     * 0x00=扭蛋（Motor_Hoolle2），0x01=钢珠（Motor_Hoolle1）。
-     */
-    if (EventGroupCheckBits(&Mesg_event, MesgEvent_EggOutputTimeout))
-    {
-        Comm_SendMesg_FillData_withResend(
-            &Tx1,
-            Board_to_Android,
-            t_HoolleOutputTimeOut,
-            (uint32_t)Motor_Hoolle2.Hoolle_num,
-            HOOLLE_TYPE_EGG,
-            &ResendList);
-        EventGroupClearBits(&Mesg_event, MesgEvent_EggOutputTimeout);
-    }
+    /* 原武松：0x05为剩余珠数，ExpandCode=0；吐卡一次/完成分别为0x14/0x15。 */
     if (EventGroupCheckBits(&Mesg_event, MesgEvent_SteelBallOutputTimeout))
     {
-        Comm_SendMesg_FillData_withResend(
-            &Tx1,
-            Board_to_Android,
-            t_HoolleOutputTimeOut,
-            (uint32_t)Motor_Hoolle1.Hoolle_num,
-            HOOLLE_TYPE_STEEL_BALL,
-            &ResendList);
+        /* 原工程启用BEIJING_NXH_VERSION，不主动上报吐珠超时。 */
         EventGroupClearBits(&Mesg_event, MesgEvent_SteelBallOutputTimeout);
     }
-
-    // 吐卡超时
     if (EventGroupCheckBits(&Mesg_event, MesgEvent_CardOutputTimeout))
     {
-        Comm_SendMesg_FillData_withResend(&Tx1, Board_to_Android, t_CardOutputTimeOut, (uint32_t)Card.Card_num, 0x00, &ResendList);
+        CommTransmitFillData(&Tx1, Board_to_Android, t_CardOutputTimeOut, Card.Card_num, 0U);
         EventGroupClearBits(&Mesg_event, MesgEvent_CardOutputTimeout);
     }
-
-    /*
-     * 中文注释：0x05统一表示剩余待出数量，ExpandCode固定为：
-     * 0x00=扭蛋，0x01=卡片，0x02=钢珠。
-     */
-    if (EventGroupCheckBits(&Mesg_event, MesgEvent_CardOutputOnce))
-    {
-        Comm_SendMesg_FillData(&Tx1, Board_to_Android, t_RemainingHoolle, (uint32_t)Card.Card_num, REMAIN_TYPE_CARD);
-        EventGroupClearBits(&Mesg_event, MesgEvent_CardOutputOnce);
-    }
-
-    if (EventGroupCheckBits(&Mesg_event, MesgEvent_RemainingEgg))
-    {
-        Comm_SendMesg_FillData(&Tx1, Board_to_Android, t_RemainingHoolle, (uint32_t)Motor_Hoolle2.Hoolle_num, REMAIN_TYPE_EGG);
-        EventGroupClearBits(&Mesg_event, MesgEvent_RemainingEgg);
-    }
-
     if (EventGroupCheckBits(&Mesg_event, MesgEvent_RemainingSteelBall))
     {
-        Comm_SendMesg_FillData(&Tx1, Board_to_Android, t_RemainingHoolle, (uint32_t)Motor_Hoolle1.Hoolle_num, REMAIN_TYPE_STEEL_BALL);
+        CommTransmitFillData(&Tx1, Board_to_Android, t_RemainingHoolle, Motor_Hoolle1.Hoolle_num, 0U);
         EventGroupClearBits(&Mesg_event, MesgEvent_RemainingSteelBall);
     }
-
-    // 剩余卡片数为0时通知Unity关闭无卡提示弹窗：功能码0x11
+    if (EventGroupCheckBits(&Mesg_event, MesgEvent_CardOutputOnce))
+    {
+        CommTransmitFillData(&Tx1, Board_to_Android, t_CardOnce, 0U, 0U);
+        EventGroupClearBits(&Mesg_event, MesgEvent_CardOutputOnce);
+    }
     if (EventGroupCheckBits(&Mesg_event, MesgEvent_CardOutputFinish))
     {
-        Comm_SendMesg_FillData(&Tx1, Board_to_Android, t_ClearRemainMesg, 0x00, 0x00);
+        CommTransmitFillData(&Tx1, Board_to_Android, t_CardFinish, 0U, 0U);
         EventGroupClearBits(&Mesg_event, MesgEvent_CardOutputFinish);
     }
     // 版本请求

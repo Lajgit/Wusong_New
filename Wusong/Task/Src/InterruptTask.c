@@ -20,6 +20,7 @@ extern Motor_Hoolle Motor_Hoolle1, Motor_Hoolle2;
 extern Motor_Card Card;
 extern Rx_HandleTypeDef Rx1;
 extern Rx_HandleTypeDef Rx3;
+extern Rx_HandleTypeDef Rx2;
 
 static uint32_t CoinInputLastTick = 0;
 static uint8_t CoinInputTriggered = 0;
@@ -260,6 +261,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             &Rx1.Handle.temp_data,
             1);
     }
+    else if (huart == Rx2.Handle.huart)
+    {
+        /* USART2只入队，不在中断中执行微动判定或电磁阀业务。 */
+        Rx2.Handle.RingBuf.f_WriteByte(&Rx2.Handle.RingBuf, Rx2.Handle.temp_data);
+        HAL_UART_Receive_IT(huart, &Rx2.Handle.temp_data, 1);
+    }
     else if (huart == Rx3.Handle.huart)
     {
         /*
@@ -275,5 +282,21 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             huart,
             &Rx3.Handle.temp_data,
             1);
+    }
+}
+
+/* 丢帧或串口错误后复位当前解包状态并重新挂接接收，避免链路永久停收。 */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    Rx_HandleTypeDef *rx = NULL;
+    if (huart == Rx1.Handle.huart) rx = &Rx1;
+    else if (huart == Rx2.Handle.huart) rx = &Rx2;
+    else if (huart == Rx3.Handle.huart) rx = &Rx3;
+    if (rx != NULL)
+    {
+        HAL_UART_AbortReceive(huart);
+        rx->State = WAIT_HEAD;
+        rx->Queue.Index = 0U;
+        HAL_UART_Receive_IT(huart, &rx->Handle.temp_data, 1U);
     }
 }
