@@ -30,6 +30,7 @@
 #include "fatfs_sd.h"
 #include "app_sd.h"
 #include "app_bootloader.h"
+#include "app_board.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,7 +98,9 @@ int main(void)
   MX_SPI1_Init();
   MX_FATFS_Init();
   MX_USART1_UART_Init();
-  MX_TIM3_Init();
+  /* 武松主控没有RGB，跳过旧灯效定时器，避免占用新板GPIO。 */
+  if (Boot_BoardGetId() != BOOT_BOARD_WUSONG)
+    MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(10);
   App_Bootloader();

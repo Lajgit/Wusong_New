@@ -13,6 +13,7 @@
 #define FileName_Danjie "danjie.bin"
 #define FileName_PanTao "pantao.bin"
 #define FileName_Niudan "niudan.bin"
+#define FileName_Wusong "wusong.bin" // 新武松APP须链接于0x0800C000
 
 
 FRESULT mount_disk(FATFS *fs, const TCHAR *path, BYTE opt);

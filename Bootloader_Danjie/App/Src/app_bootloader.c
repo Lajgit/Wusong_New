@@ -36,10 +36,10 @@ static uint8_t TxFrame[2U + 6U + 10U + 4U];
 BootBoardId_t Boot_BoardGetId(void)
 {
     /* 中文注释：只修改下一行后重新编译，不使用OTP。
-     * 弹界：BOOT_BOARD_DANJIE；蟠桃：BOOT_BOARD_PANTAO；扭蛋：BOOT_BOARD_NIUDAN。
+     * 弹界：BOOT_BOARD_DANJIE；蟠桃：BOOT_BOARD_PANTAO；扭蛋：BOOT_BOARD_NIUDAN；武松：BOOT_BOARD_WUSONG。
      * 每次编译后将HEX另存为对应板型名称，避免下次编译覆盖。
      */
-    BootBoardId_t board_id = BOOT_BOARD_NIUDAN;
+    BootBoardId_t board_id = BOOT_BOARD_WUSONG;
     return board_id;
 }
 
@@ -47,6 +47,8 @@ const char *Boot_BoardGetFirmwareFileName(void)
 {
     switch (Boot_BoardGetId())
     {
+    case BOOT_BOARD_WUSONG:
+        return FileName_Wusong;
     case BOOT_BOARD_PANTAO:
         return FileName_PanTao;
     case BOOT_BOARD_NIUDAN:
@@ -145,9 +147,28 @@ static HAL_StatusTypeDef Flash_WriteUnlocked(uint32_t address, const uint8_t *da
     return HAL_OK;
 }
 
-void Boot_LightWaiting(void) { Light_SetAllColor(SKYBLUE, RGB_buffer); }
-void Boot_LightSuccess(void) { Light_SetAllColor(GREEN, RGB_buffer); }
-void Boot_LightError(void) { Light_SetAllColor(RED, RGB_buffer); }
+/* 武松用板载指示灯反馈升级状态，其他板型继续使用各自原RGB提示。 */
+void Boot_LightWaiting(void)
+{
+    if (Boot_BoardGetId() == BOOT_BOARD_WUSONG)
+        HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+    else
+        Light_SetAllColor(SKYBLUE, RGB_buffer);
+}
+void Boot_LightSuccess(void)
+{
+    if (Boot_BoardGetId() == BOOT_BOARD_WUSONG)
+        HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+    else
+        Light_SetAllColor(GREEN, RGB_buffer);
+}
+void Boot_LightError(void)
+{
+    if (Boot_BoardGetId() == BOOT_BOARD_WUSONG)
+        HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+    else
+        Light_SetAllColor(RED, RGB_buffer);
+}
 
 HAL_StatusTypeDef Flash_Program(uint32_t StartAddress, uint8_t *Data, uint32_t Size)
 {
@@ -687,6 +708,15 @@ static bool Boot_TrySdUpgrade(void)
     file_size = f_size(&SdFirmwareFile);
     if (file_size < 8U || file_size > APP_MAX_SIZE)
         goto finish;
+    if (Boot_BoardGetId() == BOOT_BOARD_WUSONG)
+    {
+        /* 旧武松APP链接于0x08004000，新APP为0x0800C000；先检查再擦除。 */
+        if (read_file(&SdFirmwareFile, r_buffer, 8U, &bytes_read) != FR_OK || bytes_read != 8U ||
+            !StackPointerIsValid(ReadU32LE(r_buffer)) ||
+            !ResetHandlerIsValid(ReadU32LE(&r_buffer[4])) ||
+            f_lseek(&SdFirmwareFile, 0U) != FR_OK)
+            goto finish;
+    }
     erase.TypeErase = FLASH_TYPEERASE_SECTORS;
     erase.Sector = FLASH_SECTOR_3;
     erase.NbSectors = Flash_GetSector(APP_ADDR + file_size - 1U) - FLASH_SECTOR_3 + 1U;
