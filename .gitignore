@@ -1,0 +1,30 @@
+# 三个工程的固件、编译中间文件和自动生成的链接文件。
+/Bootloader_Danjie/MDK-ARM/Bootloader_F407/
+/Wusong/MDK-ARM/Wusong/
+/Wusong_Ball/MDK-ARM/Wusong_Ball/
+/*/MDK-ARM/build/
+/*/MDK-ARM/bin/
+/*/MDK-ARM/obj/
+/*/MDK-ARM/out/
+/*/MDK-ARM/startup_*.lst
+
+# 本机窗口布局、运行日志和验证时生成的工程副本。
+/*/MDK-ARM/*.uvguix.*
+/*/MDK-ARM/.vscode/*.log
+/*/MDK-ARM/.vscode/*.log.lock
+/Bootloader_Danjie/MDK-ARM/Bootloader_verify.uvprojx
+/*/MDK-ARM/RTE/RTE_Components.h
+/Wusong_Ball/MDK-ARM/DebugConfig/Wusong_Ball_STM32F103C8_1.0.0.dbgconf
+
+# 固件导出目录和压缩包；output 中的说明文档继续跟踪。
+/output/firmware/
+/output/*.zip
+
+# 临时渲染、迁移脚本、测试运行库及构建结果不入库。
+# 保留 verification 目录顶层的测试源码和可复现验证脚本。
+/tmp/*
+!/tmp/verification/
+/tmp/verification/*
+!/tmp/verification/*.c
+!/tmp/verification/*.py
+!/tmp/verification/*.ps1
