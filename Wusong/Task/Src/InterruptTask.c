@@ -25,6 +25,9 @@ extern Rx_HandleTypeDef Rx2;
 static uint32_t CoinInputLastTick = 0;
 static uint8_t CoinInputTriggered = 0;
 
+/* 设备对象和输入滤波均就绪后才处理SysTick扫描及外部输入。 */
+static volatile uint8_t InputReady = 0U;
+
 static uint8_t HoolleInputRawState = 1U;
 static uint8_t HoolleInputStableState = 1U;
 static uint8_t HoolleInputSameCount = 0U;
@@ -32,7 +35,10 @@ static uint8_t HoolleInputSameCount = 0U;
 void HoolleInput_FilterInit(void)
 {
     uint8_t CurrentState;
+    uint32_t Primask = __get_PRIMASK();
 
+    __disable_irq();
+    InputReady = 0U;
     CurrentState =
         HAL_GPIO_ReadPin(
             HoolleInput_GPIO_Port,
@@ -43,11 +49,17 @@ void HoolleInput_FilterInit(void)
     HoolleInputRawState = CurrentState;
     HoolleInputStableState = CurrentState;
     HoolleInputSameCount = 0U;
+    HoolleInputPendingCount = 0U;
+    InputReady = 1U;
+    __set_PRIMASK(Primask);
 }
 
 void HoolleInput_Scan1ms(void)
 {
     uint8_t CurrentState;
+
+    if (InputReady == 0U)
+        return;
 
     CurrentState =
         HAL_GPIO_ReadPin(
@@ -246,6 +258,9 @@ static void CardOutput_IRQ(void)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+    /* GPIO中断先于Device_Init开放，初始化窗口内不调用尚未赋值的设备函数。 */
+    if (InputReady == 0U)
+        return;
     switch (GPIO_Pin)
     {
     case HoolleInput_Pin:

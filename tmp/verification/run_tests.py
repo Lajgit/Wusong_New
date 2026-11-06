@@ -44,11 +44,13 @@ for name,project,port,cpu,chip in [('main','Wusong','Port','Cortex-M4','STM32F40
         entry=e.header['e_entry']
     uc.reg_write(UC_ARM_REG_SP,0x2001FFF0)
     uc.reg_write(UC_ARM_REG_LR,0x080FFFF1)
-    def stop(emu,number,data):emu.emu_stop()
+    # 只有到达测试末尾BKPT才算完成；异常或指令数耗尽不能误报通过。
+    stop_interrupts=[]
+    def stop(emu,number,data):stop_interrupts.append(number);emu.emu_stop()
     uc.hook_add(UC_HOOK_INTR,stop)
     uc.emu_start(entry|1,0,count=5000000)
     values={key:int.from_bytes(uc.mem_read(symbols[key],4),'little') for key in ['checks','failed_line']}
-    result={'target':name,**values,'passed':values['failed_line']==0 and values['checks']>10}
+    result={'target':name,**values,'passed':values['failed_line']==0 and values['checks']>10 and stop_interrupts==[7], 'stop_interrupts':stop_interrupts}
 
     if values['failed_line']:
         count=int.from_bytes(uc.mem_read(symbols['sent_count'],4),'little') if 'sent_count' in symbols else 0

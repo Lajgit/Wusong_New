@@ -6,6 +6,7 @@ OUT.mkdir(exist_ok=True)
 def git(*args):return subprocess.check_output(['git','-c','core.quotepath=false','-c','core.safecrlf=false',*args],cwd=ROOT).decode('utf-8')
 files=[p for p in git('diff','--diff-filter=ACMRTD','--name-only','8ecfd8c','--','Wusong/','Wusong_Ball/').splitlines() if p.startswith(('Wusong/','Wusong_Ball/')) and Path(p).suffix in ['.c','.h','.ioc','.uvprojx','.uvoptx','.yml']]
 details={
+'Wusong/Task/Inc/InterruptTask.h':('输入初始化契约 / HoolleInput_FilterInit','声明该函数必须在Device_Init后调用，原子清待报计数并开放输入处理。','仅初始化调用契约说明；线上协议不变。'),
 'Wusong/MDK-ARM/.eide/eide.yml':('EIDE / virtualFolder', '删除已移除RGB任务、WS2812驱动与灯效库的源码引用。', '仅主控EIDE源文件列表，未实测EIDE构建。'),
 'Wusong/MDK-ARM/Wusong.uvoptx':('Keil选项 / File列表', '删除旧RGB四个C文件的调试记录，避免项目打开后出现失效路径。', '仅主控调试文件记录。'),
 'Wusong/MDK-ARM/Wusong.uvprojx':('Keil目标 / File列表', '删除旧RGB任务、WS2812驱动与灯效库的四个C文件编译引用。', '主控不再编译这些模块；球盘通道灯和数码管保留。'),
@@ -23,7 +24,7 @@ details={
 'Wusong/Core/Inc/stm32f4xx_it.h':('中断声明 / USART2_IRQHandler','增加串口2中断声明。','主控接收球盘帧。'),
 'Wusong/Core/Inc/usart.h':('串口声明 / huart2、MX_USART2_UART_Init','增加串口2句柄和初始化声明。','主控与微动板通信。'),
 'Wusong/Core/Src/gpio.c':('GPIO / MX_GPIO_Init','PD12/PD13并入游玩按键输入初始化；电子锁注释去除错误机型名称，PA0逻辑不变。','六路直连按键及电子锁注释。'),
-'Wusong/Core/Src/main.c':('启动 / main','初始化USART2。','主控球盘链路启用。'),
+'Wusong/Core/Src/main.c':('启动 / main','初始化USART2；HAL_Init前调用SystemCoreClockUpdate，按Boot继承的实际RCC配置建立毫秒时基。','主控球盘链路及上电/Boot跳转时钟交接；SWD冷启动同样适用。'),
 'Wusong/Core/Src/stm32f4xx_it.c':('中断 / USART2_IRQHandler','将串口2中断交给HAL_UART_IRQHandler。','串口2逐字节接收。'),
 'Wusong/Core/Src/system_stm32f4xx.c':('向量表 / SystemInit、USER_VECT_TAB_ADDRESS、VECT_TAB_OFFSET','显式设置Flash向量偏移0xC000。','与当前Bootloader及已有链接地址一致，支持调试器和Bootloader两种启动。'),
 'Wusong/Core/Src/usart.c':('串口驱动 / MX_USART2_UART_Init、HAL_UART_MspInit/DeInit','新增115200 8N1的USART2、PD5/PD6 AF7及NVIC配置。','仅增加球盘链路；USART1/3引脚不变。'),
@@ -33,7 +34,7 @@ details={
 'Wusong/Task/Inc/MainTask.h':('场景定义 / Scene_t','补齐原武松0~11场景号。','游戏、加注、后台和洞口场景判断。'),
 'Wusong/Task/Src/CommTask.c':('通信任务 / USART1/2/3_Deal、Board_EnterBootloader、Ball_SetChannel/SendValve/SendScene/RequestEjectIfOccupied/StopFlow/FlowTask、CommInit/CommTask、USART_SendMesg、Resend_Task、MesgDeal_Task、CommTransmitFillData','恢复原安卓业务，接入球盘与控台、流水灯和命中快照，控台06处理防摇；新增场景同步、条件成对清洞，场景更新取消旧场景重发；每条重发帧记录原串口。F0数据为42 4F 54 41时校验RTC备份标记写入成功，关闭本地输出、发送微动板停止命令并等待100ms后复位。','主控协议与远程球盘业务；接入已有Bootloader串口升级，其他F0数据继续普通复位，备份域不可写时不复位。'),
 'Wusong/Task/Src/CtrlTask.c':('机构任务 / Card_Output、CtrlTask','恢复零数量出卡完成通知，电子锁保持原2000ms；原扭蛋通道改为第二路出珠并暂停调度，保持初始化断电。清理错误机型和0x21协议注释。','第一路出珠、吐卡、开锁及舵机初始化保持；第二路未接入安卓启动命令。'),
-'Wusong/Task/Src/InterruptTask.c':('接收回调 / HAL_UART_RxCpltCallback、HAL_UART_ErrorCallback','接入Rx2环形缓冲并恢复UART错误接收；第二路改为钢珠脉宽和末颗停机逻辑，禁用PE4业务入口，避免重置第一路TIM7。','串口接收及第二路预留实现；第一路计数逻辑保持。'),
+'Wusong/Task/Src/InterruptTask.c':('接收回调 / HAL_UART_RxCpltCallback、HAL_UART_ErrorCallback','接入Rx2环形缓冲并恢复UART错误接收；第二路改为钢珠脉宽和末颗停机逻辑，禁用PE4业务入口，避免重置第一路TIM7；新增InputReady门控，设备/滤波就绪前不扫描或处理EXTI，滤波初始化原子清计数并保留PRIMASK。','串口接收及第二路预留实现；第一路计数逻辑保持。'),
 'Wusong/Task/Src/KeyTask.c':('按键任务 / SettingButton_*、PlayButton_Init、KeyAll_Init','补齐六路直连按键；K3短按开锁/长按后台，K2长按4秒。','恢复参考后台按键动作并匹配新主板引脚。'),
 'Wusong/Task/Src/MainTask.c':('主任务 / Main_Init','发送控台/球盘版本查询并同步初始场景，取消不存在的RGB控台命令。','上电初始化与实际从板协议匹配。'),
 'Wusong/Task/Src/MesgTask.c':('安卓上报 / Mesg_Task','剩余珠数Expand=0；出卡一次/完成改为14/15；沿用参考工程未主动上报吐珠超时的选择。','保持参考安卓编号与数据布局，避免用其他机型剩余物品协议。'),

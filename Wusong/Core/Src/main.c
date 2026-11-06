@@ -69,6 +69,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  /* Boot可能保留168MHz；先读取实际时钟，避免HAL_Init按默认16MHz配置SysTick。 */
+  SystemCoreClockUpdate();
   __enable_irq();
   /* USER CODE END 1 */
 

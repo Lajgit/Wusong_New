@@ -19,6 +19,7 @@ static uint32_t sent_count;
 static uint32_t resumed, displayed, resets;
 static uint32_t delay_total, backup_denied, reset_magic, reset_tick;
 static uint32_t motor_power_off, switch_power_off, reset_frames;
+static uint32_t motor_runtime_resets, card_runtime_resets;
 Motor_Hoolle Motor_Hoolle1, Motor_Hoolle2;
 Motor_Card Card;
 Switch_Valve Lock_Valve;
@@ -61,6 +62,8 @@ static void motor_off(void *self)
     if (self == &Motor_Hoolle1.Motor) motor_power_off |= 1U;
     if (self == &Motor_Hoolle2.Motor) motor_power_off |= 2U;
 }
+static void motor_reset_runtime(void *self) { motor_runtime_resets++; }
+static void card_reset_runtime(void *self) { card_runtime_resets++; }
 static void switch_off(void *self)
 {
     if (self == &Card.Switch) switch_power_off |= 1U;
@@ -71,6 +74,7 @@ void SteelBall_MotorSwitch(uint8_t on) { Motor_Hoolle1.ManualRun = on; }
 
 #include "../../Wusong/Task/Src/CommTask.c"
 #include "../../Wusong/Task/Src/InterruptTask.c"
+#include "../../Wusong/Core/Src/system_stm32f4xx.c"
 #include "../../Wusong/Port/Src/port_communicate.c"
 #include "../../Wusong/Port/Src/port_event.c"
 #include "../../Wusong/Lib/Src/app_ringbuf.c"
@@ -100,6 +104,51 @@ uint32_t test_main(void)
 {
     uint8_t f[14], saved[14];
     uint32_t before;
+    /* Boot继承PLL和SWD冷启动两种时钟均须在HAL_Init前得到正确频率。 */
+    RCC->PLLCFGR = 25U | (336U << 6U) | RCC_PLLCFGR_PLLSRC_HSE | (7U << 24U);
+    RCC->CFGR = RCC_CFGR_SWS_PLL;
+    SystemCoreClockUpdate();
+    CHECK(SystemCoreClock == 168000000U);
+    RCC->CFGR = RCC_CFGR_SWS_HSI;
+    SystemCoreClockUpdate();
+    CHECK(SystemCoreClock == 16000000U);
+    /* 初始化前对象和计时器均为空：输入回调必须返回，扫描不得读取无效GPIO。 */
+    gpio_level = GPIO_PIN_RESET;
+    HAL_GPIO_EXTI_Callback(HoolleOutput_1_Pin);
+    HAL_GPIO_EXTI_Callback(CardFeedback_Pin);
+    HoolleInput_Scan1ms(); HoolleInput_Scan1ms(); HoolleInput_Scan1ms();
+    CHECK(HoolleInputPendingCount == 0U && InputReady == 0U);
+    HoolleInputPendingCount = 7U;
+    gpio_level = GPIO_PIN_SET;
+    __disable_irq();
+    HoolleInput_FilterInit();
+    CHECK(HoolleInputPendingCount == 0U && InputReady == 1U && __get_PRIMASK() == 1U);
+    __enable_irq();
+    gpio_level = GPIO_PIN_RESET;
+    HoolleInput_Scan1ms(); HoolleInput_Scan1ms();
+    CHECK(HoolleInputPendingCount == 0U);
+    HoolleInput_Scan1ms(); HoolleInput_Scan1ms();
+    CHECK(HoolleInputPendingCount == 1U);
+    gpio_level = GPIO_PIN_SET;
+    HoolleInput_FilterInit();
+    CHECK(HoolleInputPendingCount == 0U);
+    /* 就绪后原有出珠/出卡中断必须继续计数，不能只验证提前返回。 */
+    htim7.Instance = TIM7;
+    Motor_Hoolle1.Motor.ResetRuntime = motor_reset_runtime;
+    Motor_Hoolle1.Hoolle_num = 2U;
+    Motor_Hoolle1.Motor.state = DEVICE_STATE_BUSY;
+    gpio_level = GPIO_PIN_RESET;
+    HAL_GPIO_EXTI_Callback(HoolleOutput_1_Pin);
+    CHECK(motor_runtime_resets == 1U && TIM7->CNT == 0U);
+    gpio_level = GPIO_PIN_SET; TIM7->CNT = 30U;
+    HAL_GPIO_EXTI_Callback(HoolleOutput_1_Pin);
+    CHECK(Motor_Hoolle1.Hoolle_num == 1U);
+    Card.Switch.ResetRuntime = card_reset_runtime;
+    Card.Card_num = 1U; Card.Switch.state = DEVICE_STATE_BUSY;
+    HAL_GPIO_EXTI_Callback(CardFeedback_Pin);
+    CHECK(card_runtime_resets == 1U && Card.Card_num == 0U && Card.Switch.state == DEVICE_STATE_STOP);
+    Motor_Hoolle1.Hoolle_num = 0U; Motor_Hoolle1.Motor.state = DEVICE_STATE_IDLE;
+    Card.Switch.state = DEVICE_STATE_IDLE; Mesg_event.bits = 0U;
     /* 第二路光眼入口已停用：不得改写第一路计时或产生计数/上报。 */
     htim7.Instance = TIM7;
     TIM7->CNT = 123U;
