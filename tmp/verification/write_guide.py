@@ -3,6 +3,9 @@ import json
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'output'
 tests=json.loads((ROOT/'tmp/verification/test-results.json').read_text())
+# 旧结果文件中的外部Bootloader记录不参与本仓库的断言统计。
+tests=[x for x in tests if x['target'] in ['main','ball']]
+assert {x['target'] for x in tests}=={'main','ball'}
 scene_sync='BALL_CMD_SCENE' in (ROOT/'Wusong/Task/Inc/CommTask.h').read_text(encoding='utf-8')
 def frame(direction,code,data=0,expand=0,ack=0,id=1):
     b=bytes([0xAA,0,id,direction,code])+data.to_bytes(4,'big')+bytes([ack,expand])
@@ -19,7 +22,7 @@ examples=[('安卓→主控，进入游玩场景',1,7,6,0,0),('安卓→主控�
 table='\n'.join(f'| {name} | `{frame(d,c,v,e,a,i)}` |' for i,(name,d,c,v,e,a) in enumerate(examples,1))
 count=sum(x['checks'] for x in tests)
 build_lines=[]
-for target in ['main','ball','boot']:
+for target in ['main','ball']:
     log=ROOT/'tmp/verification'/('build-'+target+'-release.log')
     if not log.exists():log=ROOT/'tmp/verification'/('build-'+target+'-final.log')
     if not log.exists():log=ROOT/'tmp/verification'/('build-'+target+'.log')
@@ -36,7 +39,7 @@ guide=f'''# 新板迁移与验证说明
 
 ## 当前结果与范围
 
-本次修改已有主控、微动板及Bootloader工程；无新增固件模块或固件第三方依赖。逐文件、逐函数的原代码与修改后代码见同目录`修改记录.md`。
+当前仓库只维护主控和微动板APP；通用Bootloader已迁入[独立仓库](https://github.com/Lajgit/bootloader)，不由本目录脚本构建、测试或导出。无新增固件模块或固件第三方依赖。逐文件、逐函数的原代码与修改后代码见同目录`修改记录.md`。
 
 已恢复原武松安卓命令和上报编号，接入主控与两块从板的14字节通信。新原理图无RGB，RGB亮度、RGB场景输出及不存在的按键灯输出不再执行。保留设置结构中的原字段，避免更改存储布局。
 
@@ -44,7 +47,7 @@ guide=f'''# 新板迁移与验证说明
 
 {sync_text}
 
-主控已接入串口升级入口：安卓01/F0的数据为42 4F 54 41时，将0x424F5441写入RTC备份寄存器并读回确认，关闭本地电机、吐卡和锁控，停止流水灯并发送微动板停阀命令，等待100ms后系统复位。其他F0数据仍普通复位；备份域访问或写入失败时不复位。该APP升级入口保持不变；另按用户要求在Bootloader增加微动板成功提示，从板程序不变。
+主控已接入串口升级入口：安卓01/F0的数据为42 4F 54 41时，将0x424F5441写入RTC备份寄存器并读回确认，关闭本地电机、吐卡和锁控，停止流水灯并发送微动板停阀命令，等待100ms后系统复位。其他F0数据仍普通复位；备份域访问或写入失败时不复位。该APP升级入口保持不变；配套Bootloader的升级与成功提示由独立仓库维护。
 
 ## 复现依据、原现象与预期
 
@@ -55,8 +58,6 @@ guide=f'''# 新板迁移与验证说明
 | 原武松吐卡一次/完成 | 当前模板发送05剩余卡数/11关闭提示 | 恢复00/14和00/15，Data=0、Expand=0 |
 | 微动板接新原理图 | 模板使用PA2/PA3串口、PA6 RGB、七路光眼 | USART1 PA9/PA10，十二路微动、SM16306和三阀 |
 | 主控接PD5/PD6 | 没有USART2接收任务 | USART2中断接收并处理微动板消息 |
-| 新武松SD文件 | Boot默认选择niudan.bin并启动RGB定时器 | 选择wusong.bin，成功时微动板LED1~LED12全亮一秒 |
-| 旧地址武松BIN误放入SD | 新应用地址与旧BIN向量不符 | 擦除前拒绝，不破坏现有APP |
 
 以上是代码审查和仿真复现，不是实物现象。实物烧录、联机、实际机械时序、噪声条件和断电过程均**尚未验证**。
 
@@ -131,44 +132,46 @@ ACK=1时原帧原方向回显。发送端每1000ms重发一次，RetryID递增�
 
 ## 编译、固件及烧录
 
-本机Keil路径`E:/Keil5/UV4/UV4.exe`，ARMCC 5.06 update 6。主控APP链接`0x0800C000`，显式VTOR偏移C000；Boot从`0x08000000`启动、上限C000；设置区`0x080E0000`。OTA缓存A0000~DFFFF，其中DFF00起为元数据。不要使用旧板链接于08004000的BIN；本次SD会在擦除前拒绝该向量。
+本机Keil路径`E:/Keil5/UV4/UV4.exe`。主控APP链接`0x0800C000`，显式VTOR偏移C000；设置区为`0x080E0000`。外部通用Bootloader从`0x08000000`启动，编译时选择`BOOT_BOARD_WUSONG`。本仓库不再合并或导出Bootloader镜像。
 
-PowerShell完整重编译：
+PowerShell重编译、回归与导出当前两个APP：
 
 ```powershell
-$taskRoot = '{ROOT}'
-Set-Location -LiteralPath $taskRoot
-& '{ROOT}/tmp/verification/build_release.ps1'
-Get-Content -LiteralPath '{ROOT}/tmp/verification/build-main-release.log' -Tail 8
-Get-Content -LiteralPath '{ROOT}/tmp/verification/build-ball-release.log' -Tail 8
-Get-Content -LiteralPath '{ROOT}/tmp/verification/build-boot-release.log' -Tail 8
-& 'C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' '{ROOT}/tmp/verification/export_firmware.py'
-
+Set-Location -LiteralPath '{ROOT}'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./tmp/verification/build_release.ps1
+python ./tmp/verification/run_tests.py
+python ./tmp/verification/export_firmware.py
+python ./tmp/verification/write_report.py
+python ./tmp/verification/write_guide.py
 ```
+
+首次运行仿真需按下方命令准备本地依赖；Keil及Python路径需与本机安装一致。构建脚本仍生成临时Keil工程，使用独立输出目录并在结束后移除临时工程，不更改正式工程设置。
 
 实际编译记录（完整日志在tmp/verification）：
 
 {chr(10).join(build_lines)}
 
-原输出目录曾出现.o/.crf写入Invalid argument；上述验证脚本在同目录生成临时Keil项目，使用独立输出目录并关闭临时目标的浏览信息，保留原工程设置，完成后移除临时项目。
-
 已有编译警告主要是未改动文件的结尾换行、未使用旧变量、旧枚举混用，未为消警告修改无关代码。
 
-输出固件位于`{OUT/'firmware'}`：`Wusong_Factory.hex`包含主控Boot+APP，供首次SWD烧录；`Wusong_Main.hex`为主控APP单独镜像；`Wusong_Bootloader.hex`为Boot单独镜像；`Wusong_Ball.hex`供微动板SWD烧录；`wusong.bin`供主控SD和Bootloader串口升级。微动板没有新增Bootloader。manifest.json记录SHA256、长度及主控向量，导出脚本验证HEX/BIN一致且Boot与APP不重叠。
+本次导出清单仅包含`Wusong_Main.hex`、`Wusong_Ball.hex`和`wusong.bin`。manifest.json记录三份文件的长度、SHA256、主控向量及当前两工程源码摘要，导出脚本验证地址范围和主控HEX/BIN一致。目录中旧的Bootloader镜像、合并镜像及旧ZIP不会纳入新清单，本次未删除这些本地历史产物。
 
-本机有STM32CubeProgrammer CLI。以下为待执行烧录步骤，本次未连接/写入实物：
+首次安装时先从通用Bootloader仓库编译取得`Bootloader_Wusong.hex`，再分别烧写主控APP和微动板；不要使用旧的合并镜像代替当前产物。以下为待执行步骤，本次未连接或写入实物：
 
 ```powershell
 $taskProgrammer = 'D:/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe'
-# SWD先连接主控板
-& $taskProgrammer -c port=SWD mode=UR freq=1000 -w '{OUT/'firmware/Wusong_Factory.hex'}' -v -rst
-# SWD改接微动板，复核连接后执行
+# 先在通用Bootloader仓库选择武松板型并编译，确认此文件来自本次构建。
+$taskBootHex = 'E:/单片机项目/ChatGPT单片机项目/通用bootloader/Bootloader/MDK-ARM/firmware/Bootloader_Wusong.hex'
+if (-not (Test-Path -LiteralPath $taskBootHex -PathType Leaf)) {{ throw 'Build the external Wusong Bootloader first' }}
+# SWD连接主控板：首次安装Bootloader；已有匹配版本时可跳过这一条。
+& $taskProgrammer -c port=SWD mode=UR freq=1000 -w $taskBootHex -v -rst
+& $taskProgrammer -c port=SWD mode=UR freq=1000 -w '{OUT/'firmware/Wusong_Main.hex'}' -v -rst
+# SWD改接微动板，复核连接后执行。
 & $taskProgrammer -c port=SWD mode=UR freq=1000 -w '{OUT/'firmware/Wusong_Ball.hex'}' -v -rst
 ```
 
-控台小卡不烧写、不修改。主控SD升级时，把当前`wusong.bin`放入可正常挂载的SD根目录后断电重启。确认正常启动后移走升级文件，当前Boot会在文件仍存在时每次启动再次执行SD升级。
+控台小卡不烧写、不修改。主控SD升级时，将当前`wusong.bin`放入SD根目录后重启，成功后移走文件，避免后续启动重复升级。
 
-Bootloader串口协议仍为`AA 5A`、版本1、CRC32、BOTA目标标识，单块最多1024字节。APP进入命令沿用14字节安卓帧：Code1=01、Code2=F0、Data1~4=42 4F 54 41；数据和CRC16高字节在前，应答位可设1。原F0的其他数据仍普通复位。升级模式由Bootloader接收固件，APP不解析大块OTA数据。缓存上限为261888字节，设置区仍为0x080E0000。
+配套Bootloader串口协议为`AA 5A`、版本1、CRC32、BOTA标识，单块最多1024字节。APP进入命令沿用14字节安卓帧：Code1=01、Code2=F0、Data1~4=42 4F 54 41；数据和CRC16高字节在前，应答位可设1。其他F0数据仍普通复位。缓存上限261888字节；本仓库的仿真仅验证APP升级入口，不替代独立仓库的Bootloader验证。
 
 ## 主控串口升级入口与上板验证
 
@@ -176,7 +179,7 @@ Bootloader串口协议仍为`AA 5A`、版本1、CRC32、BOTA目标标识，单�
 
 软件回归新增普通复位、错误升级标记、备份域访问失败、有效升级请求的标记读回/关闭输出/100ms等待/发送顺序，以及坏CRC和错误方向检查。仿真仅模拟备份域可写和不可访问；真实RTC保持、供电、电机停机、串口收发与安装断电恢复均尚未验证。请求回显只代表收到帧，是否进入升级须以Bootloader HELLO应答确认。
 
-先使用上方Keil重编译和固件导出步骤，按上方SWD命令将Wusong_Factory.hex烧入主控（首次接入或当前APP尚无升级入口时需要SWD/SD安装本版APP）。微动板继续使用已有程序。USB转串口TX接主控PA10、RX接PA9并共地，使用匹配主板逻辑电平的接口；升级期间由工具独占USART1，暂停安卓端通信。测试时移走SD根目录的升级文件，避免复位后再次触发SD升级。
+先按上方步骤准备独立通用Bootloader和当前APP，并分别烧入主控；首次安装需要SWD，已有配套Bootloader时也可通过SD安装本版APP。微动板继续使用已有程序。USB转串口TX接主控PA10、RX接PA9并共地，使用匹配主板逻辑电平的接口；升级期间由工具独占USART1，暂停安卓端通信。测试时移走SD根目录的升级文件，避免复位后再次触发SD升级。
 
 使用参考仓库固定提交内的1.2-fixed工具，以下COM4须替换为实际串口号：
 
@@ -192,34 +195,21 @@ py $taskOta upgrade 'E:/单片机项目/ChatGPT单片机项目/新弹珠机/outp
 
 升级后应重新查询到0x01000400，保存的设置应保留；再按下方步骤回归原安卓、控台和微动板功能。工具的BOTA目标标识不区分机型，不要用参考仓库的Danjie测试BIN替代wusong.bin。本次未连接或烧录实物。
 
-## 武松升级成功灯效
+## 配套通用Bootloader
 
-原行为：SD升级成功时PC13翻转6次，串口安装和恢复安装成功时PC13保持成功电平并等待一秒。新行为：仅武松板型初始化USART2（PD5/PD6、115200 8N1），成功时依次发送04/07、Data4=01进入空闲场景，04/01、Data3/4=0FFF点亮LED1~LED12，等待1000ms，再发送04/01、Data3/4=0000熄灭。先退出后台，避免被实时微动跟灯覆盖。
+升级成功后的微动板12路灯全亮一秒功能位于独立[通用Bootloader仓库](https://github.com/Lajgit/bootloader)，需要选择武松板型并通过SWD更新Bootloader。本仓库只保留能接收对应场景/通道灯命令的微动板APP，以及主控F0进入升级入口。
 
-SD升级、串口INSTALL和恢复安装共用Boot_LightSuccess；已调整各调用处避免重复等待，SD成功后的PC13翻转也仅对其他板型保留。武松等待/失败的PC13指示不变，其他板型的RGB和时序不变。跳转APP前释放USART2，交由APP重新初始化。本次没有修改主控APP、微动板或控台程序，也没有增加通信功能码。
-
-修改文件为Bootloader_Danjie/App/Src/app_bootloader.c、Core/Src/main.c、Core/Src/usart.c、Core/Inc/usart.h；逐函数原因、影响和原代码/修改后代码见修改记录。CubeMX配置保留板型共用模板，USART2仅在武松板型的手工启动分支启用，不能用模板重新生成后覆盖该条件逻辑。
-
-提示帧不要求ACK，不等待或重试从板应答；微动板未连接时仍继续启动，无法保证灯实际点亮。点亮一秒的物理时序、串口掉线表现及供电条件尚未实机验证。软件测试已覆盖固定报文CRC16、SD和串口安装各仅等待1000ms、失败无成功提示，并在微动板实际接收/扫描/移位源码中回放三帧，确认压住微动也不覆盖全亮、一秒后全灭、三个阀不动作。
-
-必须更新Bootloader才能获得该灯效，仅更换wusong.bin不会更新Bootloader。重新编译并导出后，用SWD烧录以下Bootloader HEX；现有APP可保留。本次未连接或烧录实物：
-
-```powershell
-$taskProgrammer = 'D:/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe'
-& $taskProgrammer -c port=SWD mode=UR freq=1000 -w 'E:/单片机项目/ChatGPT单片机项目/新弹珠机/output/firmware/Wusong_Bootloader.hex' -v -rst
-```
-
-上板分别执行SD升级、串口升级，并测试安装中断后的恢复安装：成功后12灯应同时全亮约一秒，再熄灭启动APP；升级失败和普通重启不得显示成功全亮。另在微动板处于后台且压住微动时升级，确认仍可完整显示一秒。正常APP初始化后应继续原场景、灯光和阀控制。
+成功灯效、SD安装、串口INSTALL和断电恢复需用独立仓库的Bootloader另行验证；本仓库当前测试不再编译已迁出的实现。已有Flash设置字段和0x0800C000 APP布局仍然保留。
 
 ## 已执行测试与回归步骤
 
-已执行ARM指令级仿真，直接编译并包含被测生产C文件；GPIO、UART、Flash和FatFs由测试桩提供。共{count}项断言通过：{', '.join(x['target']+' '+str(x['checks']) for x in tests)}。测试结果见`tmp/verification/test-results.json`，编译和链接日志同目录。此结果验证软件分支、报文和Flash地址逻辑，不代表真实电气和机械性能。
+已执行ARM指令级仿真，直接编译并包含被测生产C文件；GPIO、UART及备份寄存器访问由测试桩或仿真内存提供。共{count}项断言通过：{', '.join(x['target']+' '+str(x['checks']) for x in tests)}。测试结果见`tmp/verification/test-results.json`，编译和链接日志同目录。此结果验证软件分支、报文和Flash地址逻辑，不代表真实电气和机械性能。
 
 重跑命令（依赖只放在tmp/verification/runtime，不进入固件工程）：
 
 ```powershell
 Set-Location -LiteralPath '{ROOT}'
-$taskPython = 'C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+$taskPython = 'python'
 & $taskPython -m pip install --target '{ROOT}/tmp/verification/runtime' unicorn==2.1.4 pyelftools==0.33
 & $taskPython '{ROOT}/tmp/verification/run_tests.py'
 ```
@@ -234,8 +224,23 @@ $taskPython = 'C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtim
 6. 控台普通键1~5对照安卓03；控台06触发18/00，重复触发不重复新报警，5秒静默后18/01；特殊键、编码器、摇杆只更新接收状态。
 7. 吐珠、投币、出卡、恢复输出、停止、开锁和后台按键逐项与旧安卓联调；核实05剩余珠数Expand=0、14吐卡一次、15吐卡完成。实际吐珠方向、最后一颗停机和计数须上板确认。
 8. 检查保存0E、恢复11与重启后的设置；F0应普通重启。
-9. SD依次测试无文件、有效新BIN、旧04000地址BIN、错误文件、升级中断电、升级成功后移除BIN。验证Boot、设置区保留。断电恢复行为本次只测软件缓存安装路径，未进行实物断电。
-10. 按下方串口升级步骤从APP进入Bootloader并执行HELLO/BEGIN/DATA/END/INSTALL；普通F0应继续正常重启。校验错误标记、错误CRC及错误方向不会误进升级，升级前电机/吐卡/锁控关闭、三只微动板阀停止。重复块、非法大小和目标、安装断电恢复需逐项实测。
+9. SD依次测试无文件、有效新BIN、旧04000地址BIN、错误文件、升级中断电、升级成功后移除BIN。验证Boot、设置区保留。此处为配套通用Bootloader的实机回归步骤，本仓库当前脚本不验证其安装实现。
+10. 按“主控串口升级入口与上板验证”章节从APP进入Bootloader并执行HELLO/BEGIN/DATA/END/INSTALL；普通F0应继续正常重启。校验错误标记、错误CRC及错误方向不会误进升级，升级前电机/吐卡/锁控关闭、三只微动板阀停止。重复块、非法大小和目标、安装断电恢复需逐项实测。
+
+## 本次脚本清理记录
+
+通用Bootloader迁出后，原构建/回归/导出入口仍访问已删除目录，报告生成器也把已删除文件纳入统计。本次仅清理验证脚本和它们生成的说明，未修改主控、微动板业务源码，未删除本地历史固件或临时目录。
+
+| 文件/模块 | 原行为 | 修改后及影响 |
+| --- | --- | --- |
+| build_release.ps1 / 目标列表 | 构建三个工程，第三个路径已删除 | 仅构建主控/微动板，目录清单只写两项 |
+| run_tests.py / 回归循环 | 编译并执行本地Boot测试 | 仅回归主控/微动板；保留APP备份寄存器入口测试 |
+| boot_test.c / 旧Boot测试入口 | 直接包含已迁出的实现 | 从本仓库删除，Boot由独立仓库验证 |
+| export_firmware.py / 导出与清单 | 复制Boot并生成合并镜像，枚举目录所有固件 | 仅导出三份当前APP产物；导出前检查源码时间，旧文件不混入清单 |
+| write_report.py / 输入选择 | 基线差异包含已删除Boot及SDK | 仅选择当前两个工程的新增/修改文件，共37个路径 |
+| write_guide.py / 日志与模板 | 使用本地Boot日志及合并烧录步骤 | 仅统计两APP，说明单独获取通用Bootloader的流程 |
+
+以上脚本的具体原代码与修改后代码以本次Git提交差异为准；本节给出变更原因、模块及影响范围。按上方顺序运行全部脚本已通过软件验证；真实烧录和机械回归仍未执行。
 
 ## 本地Git提交与中文注释
 
@@ -250,7 +255,7 @@ git status --short
 
 ## 仍需注意的工程边界
 
-清理临时原理图图片的操作被自动审批以blocked by policy拒绝，图片保留在tmp/pdfs，不影响源码与固件。
+临时图片、历史构建目录和旧固件包不在本次脚本清理范围，均继续由现有忽略规则屏蔽。
 
 仅同步本次相关的CubeMX引脚与外设配置；主控IOC仍保留原模板其他外设项，本次未重新生成整个工程。Keil源文件为当前构建依据；不要直接让CubeMX覆盖本次手工业务迁移代码。
 

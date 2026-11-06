@@ -1,11 +1,11 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $taskKeil = 'E:/Keil5/UV4/UV4.exe'
 $taskTargets = @(
     @{ Name = 'main'; Project = 'Wusong/MDK-ARM/Wusong.uvprojx'; Target = 'Wusong' },
-    @{ Name = 'ball'; Project = 'Wusong_Ball/MDK-ARM/Wusong_Ball.uvprojx'; Target = 'Wusong_Ball' },
-    @{ Name = 'boot'; Project = 'Bootloader_Danjie/MDK-ARM/Bootloader_F407.uvprojx'; Target = 'Bootloader_F407' }
+    @{ Name = 'ball'; Project = 'Wusong_Ball/MDK-ARM/Wusong_Ball.uvprojx'; Target = 'Wusong_Ball' }
 )
+# 通用Bootloader已迁出，本仓库只记录两个APP工程的构建产物。
 $taskCatalog = @{}
 $taskBuildStamp = [DateTime]::UtcNow.ToString('yyyyMMdd_HHmmss_fff')
 foreach ($taskTarget in $taskTargets) {

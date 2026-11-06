@@ -10,12 +10,11 @@ from unicorn.arm_const import UC_ARM_REG_SP,UC_ARM_REG_LR
 from elftools.elf.elffile import ELFFile
 
 results=[]
-for name,project,port,cpu,chip in [('main','Wusong','Port','Cortex-M4','STM32F407xx'),('ball','Wusong_Ball','Mid','Cortex-M3','STM32F103xB'),('boot','Bootloader_Danjie','App','Cortex-M4','STM32F407xx')]:
+# 只回归本仓库的主控和微动板，通用Bootloader由独立仓库验证。
+for name,project,port,cpu,chip in [('main','Wusong','Port','Cortex-M4','STM32F407xx'),('ball','Wusong_Ball','Mid','Cortex-M3','STM32F103xB')]:
     includes=[f'{project}/Core/Inc',f'{project}/Task/Inc',f'{project}/{port}/Inc',f'{project}/Lib/Inc',
               f'{project}/Drivers/STM32{ "F1" if name=="ball" else "F4" }xx_HAL_Driver/Inc',
               f'{project}/Drivers/CMSIS/Include',f'{project}/Drivers/CMSIS/Device/ST/STM32{ "F1" if name=="ball" else "F4" }xx/Include']
-    if name=='boot':
-        includes += ['Bootloader_Danjie/FATFS/App','Bootloader_Danjie/FATFS/Target','Bootloader_Danjie/Middlewares/Third_Party/FatFs/src']
     obj=HERE/(name+'_test.o');elf=HERE/(name+'_test.axf')
     command=['E:/Keil5/ARM/ARMCC/bin/armcc.exe','--cpu',cpu,'--fpu=SoftVFP','--c99','--split_sections','-O1','-D'+chip,'-DUSE_HAL_DRIVER']
     for inc in includes:command+=['-I',str(ROOT/inc)]

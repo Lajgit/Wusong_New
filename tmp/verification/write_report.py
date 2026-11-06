@@ -4,15 +4,9 @@ ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'output'
 OUT.mkdir(exist_ok=True)
 def git(*args):return subprocess.check_output(['git','-c','core.quotepath=false','-c','core.safecrlf=false',*args],cwd=ROOT).decode('utf-8')
-files=[p for p in git('diff','--name-only','8ecfd8c').splitlines() if p.startswith(('Wusong/','Wusong_Ball/','Bootloader_Danjie/')) and Path(p).suffix in ['.c','.h','.ioc','.uvprojx']]
+files=[p for p in git('diff','--diff-filter=ACMRT','--name-only','8ecfd8c','--','Wusong/','Wusong_Ball/').splitlines() if p.startswith(('Wusong/','Wusong_Ball/')) and Path(p).suffix in ['.c','.h','.ioc','.uvprojx']]
 details={
 'Wusong_Ball/Lib/Src/app_ringbuf.c':('串口环形缓冲 / RingBuffer_IsEmpty/IsFull/GetSpace/GetDatalen/ReadByte','满缓冲时索引相同却被判空，四字节容量测试已复现；改用Count判空判满，读操作短临界区与现有主控一致。','微动板串口突发接收；不改变缓冲结构或通信协议。'),
-'Bootloader_Danjie/App/Inc/app_board.h':('板型定义 / BootBoardId_t','新增BOOT_BOARD_WUSONG=4，保留其他板型值。','武松升级板型识别；不改变线上OTA格式。'),
-'Bootloader_Danjie/App/Inc/app_sd.h':('SD升级定义 / FileName_Wusong','新增wusong.bin文件名。','武松SD升级；原三种文件名不变。'),
-'Bootloader_Danjie/App/Src/app_bootloader.c':('Bootloader / Boot_BoardGetId、Boot_BoardGetFirmwareFileName、Boot_BallSend、Boot_LightWaiting/Success/Error、Boot_TrySdUpgrade、OTA_HandleInstall、App_Bootloader、JumpToApplication','目标改为武松，选择wusong.bin；SD擦除前检查向量，拒绝旧0x08004000固件。武松成功时通过USART2复用04/07退出后台跟灯，再以04/01发送0x0FFF全亮，等待1000ms后发送0全灭；去除成功路径重复等待和原PC13闪烁，跳转前释放USART2。','武松SD、串口和恢复安装成功共用微动板一秒提示；等待/失败仍用板载LED，其他板型保留原提示和时序，不新增微动板协议。'),
-'Bootloader_Danjie/Core/Inc/usart.h':('串口声明 / huart2、MX_USART2_UART_Init','声明武松成功提示使用的USART2句柄和初始化函数。','Bootloader武松目标与微动板通信；USART1升级链路不变。'),
-'Bootloader_Danjie/Core/Src/usart.c':('串口驱动 / MX_USART2_UART_Init、HAL_UART_MspInit/DeInit','增加PD5/PD6 AF7、115200 8N1的USART2阻塞收发配置和释放逻辑，不启用接收中断。','仅由武松板型初始化，用于成功提示的14字节命令。'),
-'Bootloader_Danjie/Core/Src/main.c':('启动 / main','武松目标初始化USART2并跳过MX_TIM3_Init，其他板型仍初始化原RGB定时器。','避免RGB定时器占用新板GPIO，武松Bootloader可向微动板发送成功提示。'),
 'Wusong/Core/Inc/main.h':('主控引脚宏 / PlayButton5/6、Serial2','补齐PD12/PD13两路按键，明确PD5/PD6用途。','六路直连按键和球盘串口。'),
 'Wusong/Core/Inc/stm32f4xx_it.h':('中断声明 / USART2_IRQHandler','增加串口2中断声明。','主控接收球盘帧。'),
 'Wusong/Core/Inc/usart.h':('串口声明 / huart2、MX_USART2_UART_Init','增加串口2句柄和初始化声明。','主控与微动板通信。'),
@@ -51,8 +45,9 @@ details={
 'Wusong_Ball/Wusong_Ball.ioc':('CubeMX配置 / IP、引脚、NVIC、启动列表','移除本板不具备的RGB DMA/TIM配置，配置实际微动板引脚。','与本次硬件迁移一致。'),
 }
 assert set(files)==set(details),(set(files)-set(details),set(details)-set(files))
-# 固定比较初始提交，分批提交后仍能重建完整迁移记录。
+# 只比较当前保留的两个工程，排除迁出/删除的文件，避免将旧SDK当作报告输入。
 lines=['# 逐文件修改记录','',
+'本记录只覆盖当前主控和微动板；通用Bootloader已迁入独立仓库，不再从本目录生成其修改记录。', '',
 '已按功能补充引脚、协议字段、重发去重、阀状态、后台跟灯和升级边界的中文注释；另按用户要求补充主控F0串口升级入口。', '',
 '修改基线为本目录Git初始提交8ecfd8c。功能和安卓协议依据只读参考工程 Wusong_New_1.7_fixed；原项目及General_KT均未写入。',
 '', '以下每项给出绝对路径、模块/函数、原因及影响范围；diff中的减号行是原代码，加号行是修改后代码，空格行是上下文。生产源码仅修改已有文件，新增文件限于说明、输出固件和验证材料。','']
