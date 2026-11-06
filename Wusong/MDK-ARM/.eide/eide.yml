@@ -65,7 +65,6 @@ virtualFolder:
         - path: ../Lib/Src/app_flash.c
         - path: ../Lib/Src/app_list.c
         - path: ../Lib/Src/app_ringbuf.c
-        - path: ../Lib/Src/app_ws2812.c
         - path: ../Lib/Src/softspi.c
       folders: []
     - name: Port
@@ -76,8 +75,6 @@ virtualFolder:
         - path: ../Port/Src/port_event.c
         - path: ../Port/Src/port_flash.c
         - path: ../Port/Src/port_key.c
-        - path: ../Port/Src/port_light.c
-        - path: ../Port/Src/port_lighteffect.c
       folders: []
     - name: Task
       files:
@@ -87,7 +84,6 @@ virtualFolder:
         - path: ../Task/Src/FlashTask.c
         - path: ../Task/Src/InterruptTask.c
         - path: ../Task/Src/KeyTask.c
-        - path: ../Task/Src/LightTask.c
         - path: ../Task/Src/MainTask.c
         - path: ../Task/Src/MesgTask.c
       folders: []

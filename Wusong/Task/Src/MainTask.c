@@ -60,7 +60,6 @@ void Main_Task(void)
     HAL_IWDG_Refresh(&hiwdg);
     Key_Task();
     HAL_IWDG_Refresh(&hiwdg);
-    /* 中文注释：旧弹界本地灯效任务已从主循环移除。 */
     CtrlTask();
     HAL_IWDG_Refresh(&hiwdg);
     Mesg_Task();

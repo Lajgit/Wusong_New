@@ -194,7 +194,6 @@ void SysTick_Handler(void)
 
   HoolleInput_Scan1ms();
   /* USER CODE BEGIN SysTick_IRQn 1 */
-  /* 中文注释：旧弹界灯效1ms中断任务已删除。 */
   /* USER CODE END SysTick_IRQn 1 */
 }
 
@@ -271,7 +270,6 @@ void DMA1_Stream4_IRQHandler(void)
   /* USER CODE END DMA1_Stream4_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_tim3_ch1_trig);
   /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
-  /* 中文注释：旧WS2812完成回调已删除。 */
   /* USER CODE END DMA1_Stream4_IRQn 1 */
 }
 
@@ -285,7 +283,6 @@ void DMA1_Stream5_IRQHandler(void)
   /* USER CODE END DMA1_Stream5_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_tim3_ch2);
   /* USER CODE BEGIN DMA1_Stream5_IRQn 1 */
-  /* 中文注释：旧WS2812完成回调已删除。 */
   /* USER CODE END DMA1_Stream5_IRQn 1 */
 }
 
