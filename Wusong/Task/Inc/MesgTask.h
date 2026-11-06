@@ -5,8 +5,8 @@
 
 #define MesgEvent_HoolleInput (1u << 0)             // 投入珠子
 #define MesgEvent_CoinInput (1u << 1)               // 投入硬币
-#define MesgEvent_RemainingEgg (1u << 2)            // 发送扭蛋剩余待出数量
-#define MesgEvent_EggOutputTimeout (1u << 3)        // 发送扭蛋输出超时
+#define MesgEvent_RemainingSteelBall2 (1u << 2)     // 第二路出珠剩余数量事件（暂未接入上报）
+#define MesgEvent_SteelBall2OutputTimeout (1u << 3) // 第二路出珠超时事件（暂未接入上报）
 #define MesgEvent_CardOutputTimeout (1u << 4)       // 发送吐卡超时
 #define MesgEvent_NFCEnterSetting (1u << 5)         // 发送NFC进入设置
 #define MesgEvent_UnboundUnlockCard (1u << 6)       // 发送未绑定开锁卡

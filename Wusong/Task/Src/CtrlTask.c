@@ -171,10 +171,10 @@ static void SteelBallMotorTimeout_callback(void)
     EventGroupSetBits(&Mesg_event, MesgEvent_SteelBallOutputTimeout);
 }
 
-static void EggMotorTimeout_callback(void)
+static void SteelBall2MotorTimeout_callback(void)
 {
-    /* 中文注释：Motor_Hoolle2固定为扭蛋通道，超时事件单独上报。 */
-    EventGroupSetBits(&Mesg_event, MesgEvent_EggOutputTimeout);
+    /* 中文注释：第二路出珠预留超时事件，当前未启用调度或安卓上报。 */
+    EventGroupSetBits(&Mesg_event, MesgEvent_SteelBall2OutputTimeout);
 }
 
 static void CardMotorTimeout_callback(void)
@@ -206,7 +206,7 @@ void Hoolle_Output(Motor_Hoolle *Motor, uint16_t num)
  * @brief 控制钢珠/吐珠电机手动常转
  * @param enable 0=立即关闭，1=开启并持续正转
  *
- * 中文注释：该模式专用于0x21电机开关协议。
+ * 中文注释：当前仅通过关闭调用停止第一路出珠，不占用安卓流水灯0x21命令。
  * 开启时清除原有数量、清空模式和重试状态，不受光眼计数和超时状态机影响；
  * 关闭时立即停止电机，并恢复为正常按数量出货模式。
  */
@@ -285,10 +285,11 @@ void SteelBall_OutputEverySecond(void)
 void Device_Init(void)
 {
     Device_Motor_Init(&Motor_Hoolle1.Motor, &htim1, TIM_CHANNEL_1, &htim1, TIM_CHANNEL_2);
+    /* 第二路出珠仅初始化为断电空闲状态，当前不接入出珠命令。 */
     Device_Motor_Init(&Motor_Hoolle2.Motor, &htim1, TIM_CHANNEL_3, &htim1, TIM_CHANNEL_4);
     Device_Switch_Init(&Card.Switch, CardOutput_GPIO_Port, CardOutput_Pin, GPIO_PIN_SET);
 
-    /* 中文注释：新扭蛋机原理图电子锁控制脚为PA0，旧弹界PB1锁控已删除。 */
+    /* 中文注释：电子锁控制脚为PA0，高电平打开。 */
     Device_Switch_Init(&Lock_Valve.Switch, GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
 
     /* 中文注释：按原理图编号：舵机1=PA1/TIM2_CH2，舵机2=PA2/TIM2_CH3，舵机3=PA3/TIM2_CH4。 */
@@ -354,8 +355,8 @@ void CtrlTask(void)
     // SteelBall_OutputEverySecond();//每秒吐一颗钢珠
     /*==============钢珠电机控制（Motor_Hoolle1）===============*/
     Ctrl_HoolleMotor(&Motor_Hoolle1, HoolleMotor_Speed, HoolleMotor_Dir, HoolleMotorTimeout_time, HoolleMotorReverse_Time, HoolleMotorRetry_Times, SteelBallMotorTimeout_callback);
-    /*==============扭蛋电机控制（Motor_Hoolle2）===============*/
-    Ctrl_HoolleMotor(&Motor_Hoolle2, HoolleMotor2_Speed, HoolleMotor_Dir, HoolleMotorTimeout_time, HoolleMotorReverse_Time, HoolleMotorRetry_Times, EggMotorTimeout_callback);
+    /* 第二路出珠暂不调用；启用时需同时核对光眼计时及安卓协议。 */
+    // Ctrl_HoolleMotor(&Motor_Hoolle2, HoolleMotor2_Speed, HoolleMotor_Dir, HoolleMotorTimeout_time, HoolleMotorReverse_Time, HoolleMotorRetry_Times, SteelBall2MotorTimeout_callback);
     /*==============卡片机控制===============*/
     Ctrl_CardMotor(&Card, CardMotorTimeout_time, CardMotorTimeout_callback);
     /*==============电子锁控制===============*/

@@ -166,6 +166,7 @@ static void Hoolle_1_Output_IRQ(void)
 
 static void Hoolle_2_Output_IRQ(void)
 {
+    static uint8_t LastBallStopped = 0U;
     uint32_t LowCount;
 
     if (HAL_GPIO_ReadPin(
@@ -173,33 +174,38 @@ static void Hoolle_2_Output_IRQ(void)
             HoolleOutput_2_Pin) == GPIO_PIN_RESET)
     {
         __HAL_TIM_SetCounter(&htim7, 0);
-
-        /*
-         * 中文注释：扭蛋进入下方抓手后光眼被遮挡，此时不能停电机。
-         * 电机需要继续旋转直到抓手打开、扭蛋真正掉出；这里只重置出货超时计时。
-         */
         Motor_Hoolle2.Motor.ResetRuntime(
             &Motor_Hoolle2.Motor);
+
+        if (Motor_Hoolle2.Hoolle_num == 1U &&
+            Motor_Hoolle2.Motor.state == DEVICE_STATE_BUSY)
+        {
+            Motor_Hoolle2.Motor.Stop(
+                &Motor_Hoolle2.Motor);
+            LastBallStopped = 1U;
+        }
+        else
+        {
+            LastBallStopped = 0U;
+        }
 
         return;
     }
 
     LowCount = __HAL_TIM_GetCounter(&htim7);
 
-    if (LowCount > 1U)
+    if (LowCount > HOOLLE_LOW_MIN_COUNT)
     {
         if (Motor_Hoolle2.Hoolle_num > 0U)
         {
-            /* 中文注释：光眼恢复高电平表示扭蛋已离开抓手，才计为成功出货一颗。 */
             Motor_Hoolle2.Hoolle_num--;
             Motor_Hoolle2.RetryCount = 0;
 
-            /* 中文注释：Motor_Hoolle2为扭蛋通道，成功出一颗后上报扭蛋剩余待出数量。 */
+            /* 中文注释：Motor_Hoolle2为第二路出珠通道，预留剩余数量事件；当前不调用。 */
             EventGroupSetBits(
                 &Mesg_event,
-                MesgEvent_RemainingEgg);
+                MesgEvent_RemainingSteelBall2);
 
-            /* 中文注释：最后一颗真正掉出后再进入停止状态，避免提前停机导致少出一颗。 */
             if (Motor_Hoolle2.Hoolle_num == 0U &&
                 Motor_Hoolle2.Motor.state != DEVICE_STATE_IDLE)
             {
@@ -207,7 +213,20 @@ static void Hoolle_2_Output_IRQ(void)
                     DEVICE_STATE_STOP;
             }
         }
+
+        LastBallStopped = 0U;
+        return;
     }
+
+    if (LastBallStopped != 0U &&
+        Motor_Hoolle2.Hoolle_num == 1U &&
+        Motor_Hoolle2.Motor.state == DEVICE_STATE_BUSY)
+    {
+        Motor_Hoolle2.Motor.state =
+            DEVICE_STATE_START;
+    }
+
+    LastBallStopped = 0U;
 }
 
 static void CardOutput_IRQ(void)
@@ -239,7 +258,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         Hoolle_1_Output_IRQ();
         break;
     case HoolleOutput_2_Pin:
-        Hoolle_2_Output_IRQ();
+        /* 第二路出珠暂不调用，避免PE4边沿清零第一路使用的TIM7。 */
+        // Hoolle_2_Output_IRQ();
         break;
     case CardFeedback_Pin:
         CardOutput_IRQ();
@@ -269,11 +289,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     }
     else if (huart == Rx3.Handle.huart)
     {
-        /*
-         * 中文注释：USART3用于主板与控台通信。
-         * 之前这里只处理Rx1，导致USART3虽然已经启动中断接收，
-         * 但收到的字节没有写入Rx3环形缓冲区，因此控台按键和编码器均无反应。
-         */
+        /* USART3接收控台数据，入队后立即继续接收下一字节。 */
         Rx3.Handle.RingBuf.f_WriteByte(
             &Rx3.Handle.RingBuf,
             Rx3.Handle.temp_data);

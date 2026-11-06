@@ -6,9 +6,11 @@
 #include "DigitalTubeTask.h"
 #include "MesgTask.h"
 #include "usart.h"
+#include "tim.h"
 #include <string.h>
 
 static uint32_t tick;
+static GPIO_PinState gpio_level = GPIO_PIN_SET;
 static uint32_t checks;
 static uint32_t failed_line;
 static uint8_t sent[256][14];
@@ -25,6 +27,7 @@ Event_Handle_t Mesg_event, Event;
 Scene_t Scene;
 Setting_TypeDef Setting;
 UART_HandleTypeDef huart1, huart2, huart3;
+TIM_HandleTypeDef htim7;
 
 uint32_t HAL_GetTick(void) { return tick; }
 HAL_StatusTypeDef HAL_UART_Receive_IT(UART_HandleTypeDef *h, uint8_t *b, uint16_t n) { return HAL_OK; }
@@ -37,6 +40,8 @@ HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *h, const uint8_t *b, uin
     }
     return HAL_OK;
 }
+HAL_StatusTypeDef HAL_UART_AbortReceive(UART_HandleTypeDef *h) { return HAL_OK; }
+GPIO_PinState HAL_GPIO_ReadPin(GPIO_TypeDef *port, uint16_t pin) { return gpio_level; }
 void Hoolle_Output(Motor_Hoolle *m, uint16_t n) { m->Hoolle_num += n; }
 void Card_Output(Motor_Card *m, uint16_t n) { m->Card_num += n; }
 void ResumeSetting(void) { resumed++; }
@@ -65,6 +70,7 @@ void DigitalTube_SetDisplayNumber(uint32_t n) { displayed = n; }
 void SteelBall_MotorSwitch(uint8_t on) { Motor_Hoolle1.ManualRun = on; }
 
 #include "../../Wusong/Task/Src/CommTask.c"
+#include "../../Wusong/Task/Src/InterruptTask.c"
 #include "../../Wusong/Port/Src/port_communicate.c"
 #include "../../Wusong/Port/Src/port_event.c"
 #include "../../Wusong/Lib/Src/app_ringbuf.c"
@@ -94,6 +100,22 @@ uint32_t test_main(void)
 {
     uint8_t f[14], saved[14];
     uint32_t before;
+    /* 第二路光眼入口已停用：不得改写第一路计时或产生计数/上报。 */
+    htim7.Instance = TIM7;
+    TIM7->CNT = 123U;
+    Motor_Hoolle2.Hoolle_num = 2U;
+    Motor_Hoolle2.Motor.state = DEVICE_STATE_BUSY;
+    HAL_GPIO_EXTI_Callback(HoolleOutput_2_Pin);
+    CHECK(TIM7->CNT == 123U);
+    CHECK(Motor_Hoolle2.Hoolle_num == 2U && Motor_Hoolle2.Motor.state == DEVICE_STATE_BUSY);
+    CHECK(EventGroupCheckBits(&Mesg_event, MesgEvent_RemainingSteelBall2 | MesgEvent_SteelBall2OutputTimeout) == false);
+    gpio_level = GPIO_PIN_RESET;
+    HAL_GPIO_EXTI_Callback(HoolleOutput_2_Pin);
+    CHECK(TIM7->CNT == 123U);
+    CHECK(Motor_Hoolle2.Hoolle_num == 2U && Motor_Hoolle2.Motor.state == DEVICE_STATE_BUSY);
+    gpio_level = GPIO_PIN_SET;
+    Motor_Hoolle2.Hoolle_num = 0U;
+    Motor_Hoolle2.Motor.state = DEVICE_STATE_IDLE;
     CommInit();
     request(&Rx3,3U,0U,0xAA55AA55U,0U,0U,1U);
     CHECK(CtrlVersion == 0xAA55AA55U);
@@ -105,6 +127,9 @@ uint32_t test_main(void)
     request(&Rx3,3U,4U,8U,2U,0U,5U);
     CHECK(sent_count == before && CtrlSpecialButton.Data4 == 1U && CtrlEncoder.ExpandCode == 1U && CtrlJoystick.Data4 == 8U);
     request(&Rx1,1U,1U,3U,0U,0U,6U);
+    CHECK(Motor_Hoolle1.Hoolle_num == 3U && Motor_Hoolle2.Hoolle_num == 0U);
+    /* 旧模板的Expand=1也只按武松第一路出珠处理，不启动第二路。 */
+    request(&Rx1,1U,1U,0U,1U,0U,90U);
     CHECK(Motor_Hoolle1.Hoolle_num == 3U && Motor_Hoolle2.Hoolle_num == 0U);
     request(&Rx1,1U,0x11U,0U,0U,0U,7U);
     CHECK(resumed == 1U);

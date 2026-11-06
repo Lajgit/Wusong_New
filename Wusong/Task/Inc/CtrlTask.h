@@ -3,14 +3,14 @@
 
 #include "port_device.h"
 
-#define HoolleMotorTimeout_time 3000 // 吐珠/扭蛋电机超时时间
+#define HoolleMotorTimeout_time 3000 // 出珠电机超时时间
 #define CardMotorTimeout_time 3000   // 卡片机超时时间
-#define HoolleMotorReverse_Time 300  // 吐珠/扭蛋电机反转时间
-#define HoolleMotorRetry_Times 3     // 吐珠/扭蛋电机重试次数
+#define HoolleMotorReverse_Time 300  // 出珠电机反转时间
+#define HoolleMotorRetry_Times 3     // 出珠电机重试次数
 #define ValveTimeout_time 800        // 电子锁动作超时时间
 
 #define HoolleMotor_Speed 100 // 吐珠电机恢复原武松100%占空比
-#define HoolleMotor2_Speed 80 // 第二路电机速度80%
+#define HoolleMotor2_Speed 80 // 第二路出珠电机速度80%（暂不调用）
 #define HoolleMotor_Dir 0     // 电机方向
 
 typedef struct
